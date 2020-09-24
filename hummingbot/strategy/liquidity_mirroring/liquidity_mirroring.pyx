@@ -27,6 +27,7 @@ from hummingbot.strategy.strategy_base import StrategyBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring_market_pair import LiquidityMirroringMarketPair
 from hummingbot.strategy.liquidity_mirroring.position import PositionManager
+from hummingbot.strategy.liquidity_mirroring.book_state import BookState, Order
 
 NaN = Decimal("nan")
 s_decimal_0 = Decimal(0)
@@ -176,6 +177,9 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         self.start_time = datetime.timestamp(datetime.now())
         self.start_wallet_check_time = self.start_time
         self.slack_update_period = slack_update_period
+
+        self.desired_book = BookState()
+        self.current_book = BookState()
 
     @property
     def tracked_taker_orders(self) -> List[Tuple[MarketBase, MarketOrder]]:
@@ -734,102 +738,57 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         if len(messages) > 0:
             SlackPusher(self.slack_url, "BALANCE DISCREPANCY: " + '\n'.join(messages))
 
+    cdef c_check_balances(self):
+        current_time = datetime.timestamp(datetime.now())
+        time_elapsed = current_time - self.start_time
+        wallet_check_time_elapsed = current_time - self.start_wallet_check_time
+        if (wallet_check_time_elapsed > 60):
+            self.start_wallet_check_time = current_time
+            self.check_calculations()
+        if (time_elapsed > 1800):
+            if self.funds_message_sent == True:
+                self.funds_message_sent = False
+        if (time_elapsed > 60):
+            if self.fail_message_sent == True:
+                self.fail_message_sent = False
+        if (time_elapsed > (3600 * self.slack_update_period)):
+            self.start_time = current_time
+            SlackPusher(self.slack_url, self.format_status())
+
+
     cdef c_process_market_pair(self, object market_pair):
-        primary_market_pair = self.primary_market_pairs[0]
+        # prepare our new desired book
+        new_desired_book = BookState(
+            bids=list(market_pair.order_book_bid_entries()), 
+            asks=list(market_pair.order_book_ask_entries())
+            #price_tolerance=self.price_toerance,
+            #amount_tolerance=self.amount_tolerance
+        )
+        #new_desired_book.aggregate(price_precision)
+        new_desired_book.crop(len(self.bid_amounts), len(self.ask_amounts))
+        #new_desired_book.scale_amounts(self.mirroring_amount_scale) #add this if we want to scale back the size of our mirrored orders vs the source order
+        new_desired_book.markup(self.order_price_markup, self.order_price_markup)
+        new_desired_book.limit_by_ratios(self.bid_amounts, self.ask_amounts)
+        #new_desired_book.markup_fees(flat_fee, scale_fee)
+        self.desired_book = new_desired_book
 
-        bids = list(market_pair.order_book_bid_entries())
-        best_bid = bids[0]
-
-        asks = list(market_pair.order_book_ask_entries())
-        best_ask = asks[0]
-
-        midpoint = (best_ask.price + best_bid.price)/Decimal(2)
-        #TODO Make this configurable
-        threshold = Decimal(0.0005) * self.previous_buys[0]
-
-        #TODO make these thresholds dynamic and sensible
-        if (abs(best_bid.price - self.previous_buys[0]) > threshold):
-            self.previous_buys[0] = best_bid.price
-            if 0 not in self.bid_replace_ranks:
-                self.bid_replace_ranks.append(0)
-
-        if (self.best_bid_start.is_zero()):
-            self.best_bid_start = best_bid.price
-
-        threshold = Decimal(0.0005) * self.previous_sells[0]
-        if (abs(best_ask.price - self.previous_sells[0]) > threshold):
-            self.previous_sells[0] = best_ask.price
-            if 0 not in self.ask_replace_ranks:
-                self.ask_replace_ranks.append(0)
-
-        # ensure we are looking at levels and not just orders
-        bid_levels = [{"price": best_bid.price, "amount": best_bid.amount}]
-        i = 1
-        current_level = 0
-        current_bid_price = best_bid.price
-        while (len(bid_levels) < min(len(self.bid_amounts),len(bids))):
-            if (bids[i].price == current_bid_price):
-                bid_levels[current_level]["amount"] += bids[i].amount
-                i += 1
-            else:
-                current_level += 1
-                bid_levels.append({"price": bids[i].price, "amount": bids[i].amount})
-                current_bid_price = bids[i].price
-                threshold = self.previous_buys[current_level] * (midpoint - self.previous_buys[current_level]) * Decimal(0.0005)
-
-                if (abs(current_bid_price - self.previous_buys[current_level]) > threshold):
-                    self.previous_buys[current_level] = current_bid_price
-                    if current_level not in self.bid_replace_ranks:
-                        self.bid_replace_ranks.append(current_level)
-                i += 1
-
-        # ensure we are looking at levels and not just orders
-        ask_levels = [{"price": best_ask.price, "amount": best_ask.amount}]
-        i = 1
-        current_level = 0
-        current_ask_price = best_ask.price
-        while (len(ask_levels) < min(len(self.ask_amounts),len(asks))):
-            if (asks[i].price == current_ask_price):
-                ask_levels[current_level]["amount"] += asks[i].amount
-                i += 1
-            else:
-                current_level += 1
-                ask_levels.append({"price": asks[i].price, "amount": asks[i].amount})
-                current_ask_price = asks[i].price
-                threshold = self.previous_sells[current_level] * (self.previous_sells[current_level] - midpoint) * Decimal(0.0005)
-                if (abs(current_ask_price - self.previous_sells[current_level]) > threshold):
-                    self.previous_sells[current_level] = current_ask_price
-                    if current_level not in self.ask_replace_ranks:
-                        self.ask_replace_ranks.append(current_level)
-                i += 1
-
+        # Increment cycle tracking
         self.cycle_number += 1
         self.cycle_number %= 10
 
+        # Dispatch periodic tasks that run on certain cycles
         if self.cycle_number == 8:
-            current_time = datetime.timestamp(datetime.now())
-            time_elapsed = current_time - self.start_time
-            wallet_check_time_elapsed = current_time - self.start_wallet_check_time
-            if (wallet_check_time_elapsed > 60):
-                self.start_wallet_check_time = current_time
-                self.check_calculations()
-            if (time_elapsed > 1800):
-                if self.funds_message_sent == True:
-                    self.funds_message_sent = False
-            if (time_elapsed > 600):
-                if self.offset_beyond_threshold_message_sent == True:
-                    self.offset_beyond_threshold_message_sent = False
-            if (time_elapsed > 60):
-                if self.fail_message_sent == True:
-                    self.fail_message_sent = False
-            if (time_elapsed > (3600 * self.slack_update_period)):
-                self.start_time = current_time
-                SlackPusher(self.slack_url, self.format_status())
+            self.c_check_balances()
+
         if ((self.cycle_number % 2) == 0):
             self.logger().info(f"Amount to offset: {self.pm.amount_to_offset}")
-        self.adjust_primary_orderbook(primary_market_pair, best_bid, best_ask, bid_levels, ask_levels)
+
+        # Adjust the orderbooks based on our new desired orders
+        self.adjust_primary_orderbook(self.primary_market_pairs[0], best_bid, best_ask, bid_levels, ask_levels)
+
         if (self.two_sided_mirroring):
             self.adjust_mirrored_orderbook(market_pair, best_bid, best_ask)
+
 
     def adjust_primary_orderbook(self, primary_market_pair, best_bid, best_ask, bids, asks):
         primary_market: MarketBase = primary_market_pair.market

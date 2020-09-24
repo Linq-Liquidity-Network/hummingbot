@@ -77,5 +77,8 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         int cycle_number
         object slack_update_period
 
+        object desired_book
+        object current_book
+
     cdef c_process_market_pair(self, object market_pair)
     cdef bint c_ready_for_new_orders(self, list market_trading_pairs)
