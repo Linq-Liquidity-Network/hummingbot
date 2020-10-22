@@ -29,6 +29,7 @@ from hummingbot.connector.exchange.loopring.loopring_order_book_tracker import L
 from hummingbot.connector.exchange.loopring.loopring_api_order_book_data_source import LoopringAPIOrderBookDataSource
 from hummingbot.connector.exchange.loopring.loopring_api_token_configuration_data_source import LoopringAPITokenConfigurationDataSource
 from hummingbot.connector.exchange.loopring.loopring_user_stream_tracker import LoopringUserStreamTracker
+from hummingbot.connector.exchange.loopring.loopring_order_status import LoopringOrderStatus
 from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
 )
@@ -92,7 +93,6 @@ TOKENS_INFO_ROUTE = "api/v2/exchange/tokens"
 NEXT_ORDER_ID = "api/v2/orderId"
 ORDER_ROUTE = "api/v3/order"
 ORDER_CANCEL_ROUTE = "api/v2/orders"
-MAXIMUM_FILL_COUNT = 16
 UNRECOGNIZED_ORDER_DEBOUCE = 20  # seconds
 
 class LatchingEventResponder(EventListener):
@@ -385,7 +385,10 @@ cdef class LoopringExchange(ExchangeBase):
 
             status = creation_response["data"]["status"]
             if status != 'NEW_ACTIVED':
-                raise Exception(status)
+                raise Exception(f"Loopring api returned unexpected '{status}' as status of created order")
+            # status = LoopringOrderStatus[creation_response["data"]["status"]]
+            # if status != LoopringOrderStatus.processing:
+            #     raise Exception(f"Loopring api returned unexpected '{status}' as status of created order")
 
             loopring_order_hash = creation_response["data"]["orderHash"]
             in_flight_order.update_exchange_order_id(loopring_order_hash)
@@ -398,7 +401,6 @@ cdef class LoopringExchange(ExchangeBase):
             self.logger().warning(f"Error submitting {order_side.name} {order_type.name} order to Loopring for "
                                   f"{amount} {trading_pair} at {price}.")
             self.logger().info(e)
-            traceback.print_exc()
 
             # Re-sync our next order id after this failure
             base, quote = trading_pair.split('-')
@@ -528,6 +530,7 @@ cdef class LoopringExchange(ExchangeBase):
         self.c_remove_listener(ORDER_CANCELLED_EVENT, cancel_verifier)
 
         return [CancellationResult(order_id=order_id, success=success) for order_id, success in order_status.items()]
+        
     cdef object c_get_fee(self,
                           str base_currency,
                           str quote_currency,
@@ -613,13 +616,7 @@ cdef class LoopringExchange(ExchangeBase):
 
         # Issue relevent events
         for (market_event, new_amount, new_price, new_fee) in issuable_events:
-            if market_event == MarketEvent.OrderCancelled:
-                self.logger().info(f"Successfully cancelled order {tracked_order.client_order_id}")
-                self.stop_tracking(tracked_order.client_order_id)
-                self.c_trigger_event(ORDER_CANCELLED_EVENT,
-                                     OrderCancelledEvent(self._current_timestamp,
-                                                         tracked_order.client_order_id))
-            elif market_event == MarketEvent.OrderFilled:
+            if market_event == MarketEvent.OrderFilled:
                 self.c_trigger_event(ORDER_FILLED_EVENT,
                                      OrderFilledEvent(self._current_timestamp,
                                                       tracked_order.client_order_id,
@@ -628,8 +625,14 @@ cdef class LoopringExchange(ExchangeBase):
                                                       tracked_order.order_type,
                                                       new_price,
                                                       new_amount,
-                                                      TradeFee(Decimal(0), [(tracked_order.quote_asset, new_fee)]),
+                                                      TradeFee(Decimal(0), [(tracked_order.fee_asset, new_fee)]),
                                                       tracked_order.client_order_id))
+            elif market_event == MarketEvent.OrderCancelled:
+                self.logger().info(f"Successfully cancelled order {tracked_order.client_order_id}")
+                self.stop_tracking(tracked_order.client_order_id)
+                self.c_trigger_event(ORDER_CANCELLED_EVENT,
+                                     OrderCancelledEvent(self._current_timestamp,
+                                                         tracked_order.client_order_id))
             elif market_event == MarketEvent.OrderExpired:
                 self.c_trigger_event(ORDER_EXPIRED_EVENT,
                                      OrderExpiredEvent(self._current_timestamp,
@@ -651,8 +654,7 @@ cdef class LoopringExchange(ExchangeBase):
                                                                     tracked_order.client_order_id,
                                                                     tracked_order.base_asset,
                                                                     tracked_order.quote_asset,
-                                                                    (tracked_order.fee_asset
-                                                                        or tracked_order.quote_asset),
+                                                                    tracked_order.fee_asset,
                                                                     tracked_order.executed_amount_base,
                                                                     tracked_order.executed_amount_quote,
                                                                     tracked_order.fee_paid,
@@ -665,8 +667,7 @@ cdef class LoopringExchange(ExchangeBase):
                                                                      tracked_order.client_order_id,
                                                                      tracked_order.base_asset,
                                                                      tracked_order.quote_asset,
-                                                                     (tracked_order.fee_asset
-                                                                      or tracked_order.quote_asset),
+                                                                     tracked_order.fee_asset,
                                                                      tracked_order.executed_amount_base,
                                                                      tracked_order.executed_amount_quote,
                                                                      tracked_order.fee_paid,

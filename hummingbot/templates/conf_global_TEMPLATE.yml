@@ -15,6 +15,9 @@ binance_api_secret: null
 bittrex_api_key: null
 bittrex_secret_key: null
 
+blocktane_api_key: null
+blocktane_api_secret: null
+
 coinbase_pro_api_key: null
 coinbase_pro_secret_key: null
 coinbase_pro_passphrase: null
@@ -83,12 +86,9 @@ paper_trade_account_balance:
   WETH: 10
   USDC: 1000
   DAI: 1000
-- - USD
-  - 1000
-- - FTH
-  - 10
-- - XETH
-  - 10
+  USD: 1000
+  FTH: 10
+  XETH: 10
 
 telegram_enabled: false
 telegram_token: null

@@ -19,20 +19,11 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         list bid_replace_ranks
         list ask_replace_ranks
         dict marked_for_deletion
-        list has_been_offset
         str slack_url
         object performance_logger
         object best_bid_start
         object initial_base_amount
         object initial_quote_amount
-        object primary_base_balance
-        object primary_quote_balance
-        object mirrored_base_balance
-        object mirrored_quote_balance
-        object primary_base_total_balance
-        object primary_quote_total_balance
-        object mirrored_base_total_balance
-        object mirrored_quote_total_balance
         object order_replacement_threshold
         bint two_sided_mirroring
         bint funds_message_sent
@@ -40,7 +31,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         bint fail_message_sent
         bint crossed_books
         object start_time
-        object start_wallet_check_time
         object primary_best_bid
         object primary_best_ask
         object mirrored_best_bid
@@ -81,3 +71,8 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
     cdef c_process_market_pair(self, object market_pair)
     cdef bint c_ready_for_new_orders(self, list market_trading_pairs)
+    cdef object factor_in_fees(self, market_pair: MarketTradingPairTuple, price: object, amount: object, is_buy: bool, is_primary: bool)
+    cdef bint is_maker_exchange(self, object market)
+    cdef bint is_taker_exchange(self, object market)
+    cdef bint _has_different_sign(self, object a, object b)
+    cdef bint _has_reduced(self, object new, object old)

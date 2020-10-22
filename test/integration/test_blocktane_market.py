@@ -29,9 +29,9 @@ from hummingbot.core.event.events import (
     SellOrderCreatedEvent,
     TradeFee,
     TradeType,
+    OrderType
 )
 from hummingbot.model.trade_fill import TradeFill
-from hummingbot.market.market_base import OrderType
 from hummingbot.model.market_state import MarketState
 from hummingbot.model.sql_connection_manager import (
     SQLConnectionManager,
@@ -42,7 +42,7 @@ from test.integration.humming_web_app import HummingWebApp
 from hummingbot.logger.struct_logger import METRICS_LOG_LEVEL
 from hummingbot.market.markets_recorder import MarketsRecorder
 from test.integration.humming_ws_server import HummingWsServerFactory
-from hummingbot.market.blocktane.blocktane_market import BlocktaneMarket
+from hummingbot.connector.exchange..blocktane.blocktane_exchange import BlocktaneExchange
 from test.integration.assets.mock_data.fixture_blocktane import FixtureBlocktane
 from hummingbot.client.config.fee_overrides_config_map import fee_overrides_config_map
 
@@ -54,7 +54,7 @@ API_BASE_URL = "bolsa.tokamaktech.net/api/v2/xt"
 WS_BASE_URL = "wss://bolsa.tokamaktech.net/api/v2/ws/public"
 logging.basicConfig(level=METRICS_LOG_LEVEL)
 
-class BlocktaneMarketUnitTest(unittest.TestCase):
+class BlocktaneExchangeUnitTest(unittest.TestCase):
     events: List[MarketEvent] = [
         MarketEvent.ReceivedAsset,
         MarketEvent.BuyOrderCompleted,
@@ -68,7 +68,7 @@ class BlocktaneMarketUnitTest(unittest.TestCase):
         MarketEvent.OrderCancelled
     ]
 
-    market: BlocktaneMarket
+    market: BlocktaneExchange
     market_logger: EventLogger
     stack: contextlib.ExitStack
     base_api_url = "bolsa.tokamaktech.net"
@@ -112,11 +112,11 @@ class BlocktaneMarketUnitTest(unittest.TestCase):
             cls._ws_mock = cls._ws_patcher.start()
             cls._ws_mock.side_effect = HummingWsServerFactory.reroute_ws_connect
 
-            cls._t_nonce_patcher = unittest.mock.patch("hummingbot.market.blocktane.blocktane_market.get_tracking_nonce")
+            cls._t_nonce_patcher = unittest.mock.patch("hummingbot.connector.exchange.blocktane.blocktane_market.get_tracking_nonce")
             cls._t_nonce_mock = cls._t_nonce_patcher.start()
 
         cls.clock: Clock = Clock(ClockMode.REALTIME)
-        cls.market: BlocktaneMarket = BlocktaneMarket(
+        cls.market: BlocktaneExchange = BlocktaneExchange(
             blocktane_api_key=API_KEY,
             blocktane_secret_key=API_SECRET,
             trading_pairs=["fthusd"]
@@ -462,7 +462,7 @@ class BlocktaneMarketUnitTest(unittest.TestCase):
             self.clock.remove_iterator(self.market)
             for event_tag in self.events:
                 self.market.remove_listener(event_tag, self.market_logger)
-            self.market: BlocktaneMarket = BlocktaneMarket( blocktane_api_key=API_KEY, blocktane_secret_key=API_SECRET, trading_pairs=["XRP-BTC"]
+            self.market: BlocktaneExchange = BlocktaneExchange( blocktane_api_key=API_KEY, blocktane_secret_key=API_SECRET, trading_pairs=["XRP-BTC"]
             )
             for event_tag in self.events:
                 self.market.add_listener(event_tag, self.market_logger)

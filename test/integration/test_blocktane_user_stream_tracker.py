@@ -4,11 +4,11 @@ import sys
 
 sys.path.insert(0, realpath(join(__file__, "../../../")))
 
-from hummingbot.market.blocktane.blocktane_user_stream_tracker import BlocktaneUserStreamTracker
+from hummingbot.connector.exchange.blocktane.blocktane_user_stream_tracker import BlocktaneUserStreamTracker
 from hummingbot.core.data_type.user_stream_tracker import UserStreamTrackerDataSourceType
 from hummingbot.core.utils.async_utils import safe_ensure_future
 
-from hummingbot.market.blocktane.blocktane_order_book_tracker import BlocktaneOrderBookTracker
+from hummingbot.connector.exchange.blocktane.blocktane_order_book_tracker import BlocktaneOrderBookTracker
 import asyncio
 import logging
 from typing import Optional

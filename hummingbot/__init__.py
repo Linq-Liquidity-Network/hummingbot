@@ -89,16 +89,7 @@ def is_independent_package() -> bool:
 
 
 def check_dev_mode():
-    try:
-        if is_independent_package():
-            return False
-        if not path.isdir(".git"):
-            return False
-        current_branch = subprocess.check_output(["git", "symbolic-ref", "--short", "HEAD"]).decode("utf8").rstrip()
-        if current_branch != "master":
-            return True
-    except Exception:
-        return False
+    return False
 
 
 def chdir_to_data_directory():

@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from decimal import Decimal
 
-from hummingbot.market.market_base import MarketBase
+from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.strategy_base import StrategyBase
 from hummingbot.client.config.security import Security
@@ -19,7 +19,7 @@ class CancelCommand:
 
     async def async_cancel(self, exchange_name: str, base_asset: str = None, quote_asset: str = None, order_id: str = None):
         if exchange_name in self.markets:
-            market: MarketBase = self.markets[exchange_name]
+            market: ExchangeBase = self.markets[exchange_name]
             if order_id is not None:
                 for trading_tuple in self.market_trading_pair_tuples:
                     if (trading_tuple.market == market) and (trading_tuple.base_asset.upper() == base_asset.upper()) and (trading_tuple.quote_asset.upper() == quote_asset.upper()):

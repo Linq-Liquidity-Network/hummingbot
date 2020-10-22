@@ -14,7 +14,7 @@ import logging
 from typing import Dict, Optional, List
 import unittest
 
-from hummingbot.market.novadax.novadax_order_book_tracker import NovadaxOrderBookTracker
+from hummingbot.connector.exchange.novadax.novadax_order_book_tracker import NovadaxOrderBookTracker
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_tracker import (
     OrderBookTrackerDataSourceType

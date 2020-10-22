@@ -121,18 +121,6 @@ main_config_map = {
                   required_if=lambda: False,
                   type_str="json",
                   ),
-    "blocktane_api_key":
-        ConfigVar(key="blocktane_api_key",
-                  prompt="Enter your Blocktane API key >>> ",
-                  required_if=using_exchange("blocktane"),
-                  is_secure=True,
-                  is_connect_key=True),
-    "blocktane_api_secret":
-        ConfigVar(key="blocktane_api_secret",
-                  prompt="Enter your Blocktane API secret >>> ",
-                  required_if=using_exchange("blocktane"),
-                  is_secure=True,
-                  is_connect_key=True),
     "celo_address":
         ConfigVar(key="celo_address",
                   prompt="Enter your Celo account address >>> ",

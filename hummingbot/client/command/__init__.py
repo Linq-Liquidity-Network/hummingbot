@@ -39,7 +39,7 @@ __all__ = [
     ExportCommand,
     SillyCommands,
     OrderBookCommand,
-    TickerCommand
+    TickerCommand,
     ManualTradeCommand,
     OffsetCommand,
     DepthCommand,

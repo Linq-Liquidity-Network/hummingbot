@@ -4,8 +4,8 @@ from typing import (
 )
 from decimal import Decimal
 from hummingbot.client.config.global_config_map import global_config_map
-from hummingbot.market.markets_recorder import MarketsRecorder
-from hummingbot.market.paper_trade import create_paper_trade_market
+from hummingbot.connector.markets_recorder import MarketsRecorder
+from hummingbot.connector.exchange.paper_trade import create_paper_trade_market
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring_market_pair import LiquidityMirroringMarketPair
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring import LiquidityMirroringStrategy
@@ -32,6 +32,16 @@ def start(self):
     paper_trade_offset = liquidity_mirroring_config_map.get("paper_trade_offset").value
     slack_update_period = liquidity_mirroring_config_map.get("slack_update_period").value
     order_replacement_threshold = liquidity_mirroring_config_map.get("order_replacement_threshold").value
+
+    try:
+        primary_market_trading_pair: str = primary_trading_pair
+        mirrored_market_trading_pair: str = mirrored_trading_pair
+        primary_assets: List[Tuple[str, str]] = self._initialize_market_assets(primary_market, [primary_market_trading_pair])[0]
+        secondary_assets: List[Tuple[str, str]] = self._initialize_market_assets(mirrored_market,
+                                                                           [mirrored_market_trading_pair])[0]                                                                           
+    except ValueError as e:
+        self._notify(str(e))
+        return
 
     bid_ratios_type = liquidity_mirroring_config_map.get("bid_amount_ratio_type").value
     if bid_ratios_type == "manual":
@@ -68,16 +78,6 @@ def start(self):
     else:
         ask_ratios = [Decimal(1/55),Decimal(2/55),Decimal(3/55),Decimal(4/55),Decimal(5/55),Decimal(6/55),
                                Decimal(7/55),Decimal(8/55),Decimal(9/55),Decimal(10/55)]
-
-    try:
-        primary_market_trading_pair: str = self._convert_to_exchange_trading_pair(primary_market, [primary_trading_pair])[0]
-        mirrored_market_trading_pair: str = self._convert_to_exchange_trading_pair(mirrored_market, [mirrored_trading_pair])[0]
-        primary_assets: List[Tuple[str, str]] = self._initialize_market_assets(primary_market, [primary_market_trading_pair])[0]
-        secondary_assets: List[Tuple[str, str]] = self._initialize_market_assets(mirrored_market,
-                                                                           [mirrored_market_trading_pair])[0]                                                                           
-    except ValueError as e:
-        self._notify(str(e))
-        return
     
     for primary_asset in primary_assets:
         found = False
@@ -99,13 +99,14 @@ def start(self):
         self._initialize_wallet(token_trading_pairs=list(set(primary_assets)))
         self._initialize_markets([(primary_market, [primary_market_trading_pair])])
         try:
-            market = create_paper_trade_market(mirrored_market, [mirrored_market_trading_pair])
+            market: ExchangeBase = create_paper_trade_market(mirrored_market, [mirrored_market_trading_pair])
         except Exception:
             raise
         paper_trade_account_balance = global_config_map.get("paper_trade_account_balance").value
-        for asset, balance in paper_trade_account_balance:
-            market.set_balance(asset, balance)
-        self.markets[mirrored_market]: MarketBase = market
+
+        for asset in paper_trade_account_balance.keys():
+            market.set_balance(asset, paper_trade_account_balance[asset])
+        self.markets[mirrored_market]: ExchangeBase = market
         self.markets_recorder = MarketsRecorder(
             self.trade_fill_db,
             [self.markets[mirrored_market]],
@@ -115,8 +116,8 @@ def start(self):
         self.markets_recorder.start()
 
     self.assets = set(primary_assets + secondary_assets)
-    self.primary_market_trading_pair_tuples = [MarketTradingPairTuple(self.markets[primary_market], primary_market_trading_pair, primary_assets[0], primary_assets[1])]
-    self.mirrored_market_trading_pair_tuples = [MarketTradingPairTuple(self.markets[mirrored_market], mirrored_market_trading_pair, secondary_assets[0], secondary_assets[1])]
+    self.primary_market_trading_pair_tuples: List[MarketTradingPairTuple] = [MarketTradingPairTuple(self.markets[primary_market], primary_market_trading_pair, primary_assets[0], primary_assets[1])]
+    self.mirrored_market_trading_pair_tuples: List[MarketTradingPairTuple] = [MarketTradingPairTuple(self.markets[mirrored_market], mirrored_market_trading_pair, secondary_assets[0], secondary_assets[1])]
     self.market_trading_pair_tuples = self.primary_market_trading_pair_tuples + self.mirrored_market_trading_pair_tuples
     self.strategy = LiquidityMirroringStrategy(primary_market_pairs=self.primary_market_trading_pair_tuples,
                                                mirrored_market_pairs=self.mirrored_market_trading_pair_tuples,
