@@ -1,3 +1,5 @@
+{{- $strategyBlock := index .Values .Values.releaseEnvironment -}}
+{{- range $strategyName, $strategy := $strategyBlock -}}
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
@@ -15,9 +17,8 @@ spec:
     spec:
       imagePullSecrets:
       - name: {{ .Values.global.imagePullSecrets.default.name }}
-      containers:
-      {{ range $i, $strategy := .Values.strategies -}}     
-      - name: {{ $strategy.name }}
+      containers: 
+      - name: {{ $strategyName }}
         image: {{ include "image.hummingbot.repository" $ }}
         imagePullPolicy: {{ default "Always" $.Values.global.image.hummingbot.imagepullPolicy }}
         args: ["sh", "-c", "./init.sh" ]
@@ -26,30 +27,26 @@ spec:
           value: {{ $.Values.global.options.config_password }}
         - name: "STRAT_CONF_FILE"
           value: {{ $strategy.config }}
+        - name: "SYNCBOT_SSH_KEY"
+          value: {{ $.Values.global.syncbotSSHkey }}
+        - name: "STRATEGY_NAME"
+          value: {{ printf $strategyName }}
+        - name: "STRATEGIES_BRANCH"
+          value: {{ $.Values.global.releaseBranch }}
+        - name: "KEY_FILES_ENCODED"
+          value: {{ include "get-key-data" (dict "accountList" $strategy.accounts) }}
         volumeMounts:
         - mountPath: /conf-master-data
           name: config-data
-        - mountPath: /home/hummingbot/conf
-          name: conf-{{ $strategy.subfolder }}-vol
-        - mountPath: /home/hummingbot/logs
-          name: log-{{ $strategy.subfolder }}-vol 
-        - lifecycle: 
-          preStop:
+        lifecycle: 
+        - preStop:
             exec: 
-              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter"; sleep 5;]
-      {{ end -}}
-      volumes:
-      {{ range $i, $strategy := .Values.strategies -}}   
-      - name: log-{{ $strategy.subfolder }}-vol
-        persistentVolumeClaim:
-          claimName: {{include "hummingbot.logs.pv.name" $ }}-{{ $strategy.subfolder }}      
-      - name: conf-{{ $strategy.subfolder }}-vol
-        persistentVolumeClaim:
-          claimName: {{include "hummingbot.conf.pv.name" $ }}-{{ $strategy.subfolder }} 
-      {{ end -}}                      
+              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter"; sleep 5;]     
       - name: config-data
         configMap:
           name: hummingbot-conf
           items:
           - key: conf_global.yml
             path: conf_global.yml 
+---
+{{- end -}}

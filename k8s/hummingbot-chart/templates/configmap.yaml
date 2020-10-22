@@ -86,7 +86,7 @@ data:
       - coin_gecko_api
     - - DAI
       - coin_gecko_api
-    send_error_logs: true
+    send_error_logs: false
 
     # Advanced configs: Do NOT touch unless you understand what you are changing
     client_id: 67b8dc40283f02da56075d968eebbdbb2b0f84e6

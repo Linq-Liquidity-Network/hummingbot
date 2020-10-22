@@ -1,3 +1,8 @@
+ssh-add - <<< "${SYNCBOT_SSH_KEY}"
+
+python3 initialize_key_files.py
+python3 sync_strategies.py
+
 #!/bin/bash
 tmux new-session -d -s hummingbot -n hbstrat
 tmux send-keys -t hummingbot:hbstrat "python3 bin/hummingbot_quickstart.py" Enter

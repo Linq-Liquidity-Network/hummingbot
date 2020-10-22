@@ -50,37 +50,98 @@ global:
     default:
       name: regcred
       registry: index.docker.io/v1/
-
+      
   dockerconfigjson: placeholder
-
+      
+  syncbotSSHkey: placeholder
+  
   options:
     paper_trade: false
-    config_password: placeholder
+    config_password: placeholder  
 
-persistence:
-  hummingbot_conf:
-    name: conf
-    pathRoot: "/home/hummingbot"
-  hummingbot_logs:
-    name: logs
-    pathRoot: "/home/hummingbot"    
-  hummingbot:
-    name: hummingbot
-    pathRoot: "/home/hummingbot"        
+  # These accounts are our trading accounts. The data field is json dictionary with one entry for each
+  # of the encrypted key files from hummingbot. No data should be defined in this file. Only development
+  # accounts should be defined in the secrets.dev.yaml, and only production accounts should be defined
+  # in secrets.prod.yaml.  These values will be passed into the container in an env variable, from which
+  # the init.sh will create the necessary key files.
+  # THIS IS THE MOST SENSITIVE DATA IN OUR STACK!
+  accounts:
+    bolsacripto-prod1:
+      description: "trading@linq.network"
+      data: placeholder
+    bolsacripto-dev1:
+      description: "michael@tokamak.ca"
+      data: placeholder
+    binance-prod1:
+      description: ""
+      data: placeholder
+    binance-dev1:
+      description: ""
+      data: placeholder
+    ftx-prod1:
+      description: ""
+      data: placeholder
+    ftx-dev1:
+      description: ""
+      data: placeholder
+    loopring-dev1:
+      description: "Account #2386"
+      data: placeholder
+    loopring-prod1:
+      description: "Account #4553"
+      data: placeholder
+    loopring-prod2:
+      description: "Account #4551"
+      data: placeholder
+    loopring-prod3:
+      description: "Account #4552"
+      data: placeholder
 
-strategies:
-  - name: bc-ftx-btc-brl
-    config: trade.bolsacripto.com.ftx.btc.brl.yml
-    subfolder: 'bc-ftx-btc-brl'
-  - name: bc-ftx-btc-pax
-    config: trade.bolsacripto.com.ftx.btc.pax.yml
-    subfolder: 'bc-ftx-btc-pax'
-  - name: bc-ftx-eth-btc
-    config: trade.bolsacripto.com.ftx.eth.btc.yml
-    subfolder: 'bc-ftx-eth-btc' 
-  # - name: binance-ftx-eth-usdt
-    # config: binance.ftx.eth.usdt.yml
-    # subfolder: 'binance-ftx-eth-usdt'
-  # - name: loopring-binance-lrc-usdt
-    # config: loopring.binance.lrc.usdt.yml
-    # subfolder: 'loopring-binance-lrc-usdt'
+  releaseEnvironment: placeholder  # Either strategiesProd or strategiesDev. Defined in the secret.*.yaml files
+  releaseBranch: placeholder # Either master or develop. Defined in the secrets.*.yaml files
+
+  # Strategies to launch on production.
+  # There will be one pod for each sub-entry of strategiesProd - each with one container
+  # for each of thier sub-entries.
+  strategiesProd:
+    lm-bolsacripto-ftx-btc-brl:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+    lm-bolsacripto-ftx-btc-pax:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+    lm-bolsacripto-ftx-eth-btc:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+    lm-bolsacripto-ftx-brl-pax:
+      accounts:
+        - bolsacripto-prod1
+        - ftx-prod1
+    lm-loopring-binance-lrc-usdt:
+      accounts:
+        - loopring-prod2
+        - binance-prod1
+
+  # Strategies to launch on development.
+  # There will be one pod for each sub-entry of strategiesDev - each with one container
+  # for each of thier sub-entries.
+  strategiesDev:
+    lm-bolsacripto-ftx-btc-brl:
+      accounts: 
+        - bolsacripto-dev1
+        - ftx-dev1
+    lm-bolsacripto-ftx-btc-pax:
+      accounts: 
+        - bolsacripto-dev1
+        - ftx-dev1
+    lm-bolsacripto-ftx-eth-btc:
+      accounts: 
+        - bolsacripto-dev1
+        - ftx-dev1
+    lm-bolsacripto-novadax-eth-btc:
+      accounts:
+        - bolsacripto-dev1
+        - novadax-dev1

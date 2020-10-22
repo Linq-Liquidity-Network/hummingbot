@@ -84,40 +84,6 @@ The default name can be overidded by setting nameOverride in values
 {{- end -}}
 
 
-{{- define "hummingbot.logs.pv.name" -}}
-{{- .Values.persistence.hummingbot_logs.name -}}
-{{- end -}}
-
-{{- define "hummingbot.logs.pv.label" -}}
-{{ $name := include "hummingbot.logs.pv.name" . -}}
-{{- printf "%s" $name -}}
-{{- end -}}
-
-{{- define "hummingbot.logs.pv.path" -}}
-{{ $tag := include "resource.releaseTag" . -}}
-{{- $root := .Values.persistence.hummingbot_logs.pathRoot -}}
-{{- $dir := include "hummingbot.logs.pv.name" . -}}
-{{- printf "%s/%s" $root $tag | replace "+" "_"  | trimSuffix "-" }}
-{{- end -}}
-
-
-{{- define "hummingbot.conf.pv.name" -}}
-{{- .Values.persistence.hummingbot_conf.name -}}
-{{- end -}}
-
-{{- define "hummingbot.conf.pv.label" -}}
-{{ $name := include "hummingbot.conf.pv.name" . -}}
-{{- printf "%s" $name -}}
-{{- end -}}
-
-{{- define "hummingbot.conf.pv.path" -}}
-{{ $tag := include "resource.releaseTag" . -}}
-{{- $root := .Values.persistence.hummingbot_conf.pathRoot -}}
-{{- $dir := include "hummingbot.conf.pv.name" . -}}
-{{- printf "%s/%s" $root $tag | replace "+" "_"  | trimSuffix "-" }}
-{{- end -}}
-
-
 {{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
@@ -141,4 +107,20 @@ Create chart name and version as used by the chart label.
 */}}
 {{- define "chart.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Get the concatenated key data for a given strategy. 
+
+Each account's data property is a comma seperated set of file names to contents. 
+ie. "key file 1 name":"key file 1 contents","key file 2 name":"key file 2 contents",...
+
+This function returns a string combination of the data entries for each account name that is passed in 
+from the list argument "accountList". These data entries are combined, have the last comma removed, 
+and are then wrapped in angle brackets "{ ... }", to make a valid json dict of those keyfiles.
+
+Expects a dict as an argument with the entry "accountList".
+*/}}
+{{- define "get-key-data" -}}
+  {{/* TODO */}}
 {{- end -}}
