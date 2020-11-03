@@ -14,7 +14,7 @@ from hummingbot.connector.exchange.new_connector.new_connector_api_token_configu
 s_empty_diff = np.ndarray(shape=(0, 4), dtype="float64")
 _ddaot_logger = None
 
-cdef class NewConnectorActiveOrderTracker:
+cdef class classNewConnectorActiveOrderTracker:
     def __init__(self, token_configuration, active_asks=None, active_bids=None):
         super().__init__()
         self._token_config: NewConnectorAPITokenConfigurationDataSource = token_configuration

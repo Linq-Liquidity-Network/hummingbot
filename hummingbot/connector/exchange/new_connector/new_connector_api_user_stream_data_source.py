@@ -19,9 +19,9 @@ from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_da
 from hummingbot.connector.exchange.new_connector.new_connector_order_book import NewConnectorOrderBook
 from hummingbot.connector.exchange.new_connector.new_connector_utils import get_ws_api_key
 
-NEW_CONNECTOR_WS_URL = "wss://ws.new_connector.io/v2/ws"
+urlNEW_CONNECTOR_WS_URL = "wss://ws.new_connector.io/v2/ws"
 
-NEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
+urlNEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
 
 
 class NewConnectorAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -53,7 +53,7 @@ class NewConnectorAPIUserStreamDataSource(UserStreamTrackerDataSource):
         while True:
             try:
                 ws_key: str = await get_ws_api_key()
-                async with websockets.connect(f"{NEW_CONNECTOR_WS_URL}?wsApiKey={ws_key}") as ws:
+                async with websockets.connect(f"{urlNEW_CONNECTOR_WS_URL}?wsApiKey={ws_key}") as ws:
                     ws: websockets.WebSocketClientProtocol = ws
 
                     topics = [{"topic": "order", "market": m} for m in self._orderbook_tracker_data_source.trading_pairs]

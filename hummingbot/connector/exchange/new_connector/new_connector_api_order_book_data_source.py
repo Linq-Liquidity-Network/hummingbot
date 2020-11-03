@@ -38,7 +38,7 @@ TICKER_URL = "/api/v2/ticker?market=:markets"
 SNAPSHOT_URL = "/api/v2/depth?market=:trading_pair"
 TOKEN_INFO_URL = "/api/v2/exchange/tokens"
 WS_URL = "wss://ws.new_connector.io/v2/ws"
-NEW_CONNECTOR_PRICE_URL = "https://api.new_connector.io/api/v2/ticker"
+urlNEW_CONNECTOR_PRICE_URL = "https://api.new_connector.io/api/v2/ticker"
 
 
 class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
@@ -125,7 +125,7 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
     @staticmethod
     @cachetools.func.ttl_cache(ttl=10)
     def get_mid_price(trading_pair: str) -> Optional[Decimal]:
-        resp = requests.get(url=NEW_CONNECTOR_PRICE_URL, params={"market": trading_pair})
+        resp = requests.get(url=urlNEW_CONNECTOR_PRICE_URL, params={"market": trading_pair})
         record = resp.json()
         if record["resultInfo"]["code"] == 0:
             data = record["data"]

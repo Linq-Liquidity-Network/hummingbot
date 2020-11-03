@@ -10,8 +10,8 @@ EXAMPLE_PAIR = "LRC-ETH"
 
 DEFAULT_FEES = [0.0, 0.2]
 
-NEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
-NEW_CONNECTOR_WS_KEY_PATH = "/v2/ws/key"
+urlNEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
+urlNEW_CONNECTOR_WS_KEY_PATH = "/v2/ws/key"
 
 KEYS = {
     "new_connector_accountid":
@@ -54,7 +54,7 @@ def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
 async def get_ws_api_key():
     async with aiohttp.ClientSession() as client:
         response: aiohttp.ClientResponse = await client.get(
-            f"{NEW_CONNECTOR_ROOT_API}{NEW_CONNECTOR_WS_KEY_PATH}"
+            f"{urlNEW_CONNECTOR_ROOT_API}{urlNEW_CONNECTOR_WS_KEY_PATH}"
         )
         if response.status != 200:
             raise IOError(f"Error getting WS key. Server responded with status: {response.status}.")

@@ -1,7 +1,7 @@
 # distutils: language=c++
 cimport numpy as np
 
-cdef class NewConnectorActiveOrderTracker:
+cdef class classNewConnectorActiveOrderTracker:
     cdef object _token_config
     cdef dict _active_bids
     cdef dict _active_asks
