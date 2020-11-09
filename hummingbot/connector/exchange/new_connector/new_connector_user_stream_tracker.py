@@ -12,12 +12,12 @@ from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
     safe_gather,
 )
-from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import NewConnectorAPIOrderBookDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_api_user_stream_data_source import NewConnectorAPIUserStreamDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_auth import NewConnectorAuth
+from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import classNewConnectorAPIOrderBookDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_api_user_stream_data_source import classNewConnectorAPIUserStreamDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_auth import classNewConnectorAuth
 
 
-class NewConnectorUserStreamTracker(UserStreamTracker):
+class classNewConnectorUserStreamTracker(UserStreamTracker):
     _krust_logger: Optional[HummingbotLogger] = None
 
     @classmethod
@@ -27,19 +27,19 @@ class NewConnectorUserStreamTracker(UserStreamTracker):
         return cls._krust_logger
 
     def __init__(self,
-                 orderbook_tracker_data_source: NewConnectorAPIOrderBookDataSource,
-                 new_connector_auth: NewConnectorAuth):
+                 orderbook_tracker_data_source: classNewConnectorAPIOrderBookDataSource,
+                 new_connector_auth: classNewConnectorAuth):
         super().__init__()
         self._ev_loop: asyncio.events.AbstractEventLoop = asyncio.get_event_loop()
         self._data_source: Optional[UserStreamTrackerDataSource] = None
         self._user_stream_tracking_task: Optional[asyncio.Task] = None
         self._orderbook_tracker_data_source = orderbook_tracker_data_source
-        self._new_connector_auth: NewConnectorAuth = new_connector_auth
+        self._new_connector_auth: classNewConnectorAuth = new_connector_auth
 
     @property
     def data_source(self) -> UserStreamTrackerDataSource:
         if not self._data_source:
-            self._data_source = NewConnectorAPIUserStreamDataSource(orderbook_tracker_data_source=self._orderbook_tracker_data_source,
+            self._data_source = classNewConnectorAPIUserStreamDataSource(orderbook_tracker_data_source=self._orderbook_tracker_data_source,
                                                                 new_connector_auth=self._new_connector_auth)
         return self._data_source
 

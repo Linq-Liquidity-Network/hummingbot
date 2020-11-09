@@ -11,7 +11,7 @@ from typing import (
 import ujson
 
 from hummingbot.logger import HummingbotLogger
-from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import NewConnectorOrderBookMessage
+from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import classNewConnectorOrderBookMessage
 from hummingbot.core.event.events import TradeType
 from hummingbot.core.data_type.order_book cimport OrderBook
 from hummingbot.core.data_type.order_book_message import (
@@ -21,7 +21,7 @@ from hummingbot.core.data_type.order_book_message import (
 
 _dob_logger = None
 
-cdef class NewConnectorOrderBook(OrderBook):
+cdef class classNewConnectorOrderBook(OrderBook):
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
@@ -34,10 +34,10 @@ cdef class NewConnectorOrderBook(OrderBook):
     def snapshot_message_from_exchange(cls,
                                        msg: Dict[str, any],
                                        timestamp: float,
-                                       metadata: Optional[Dict] = None) -> NewConnectorOrderBookMessage:
+                                       metadata: Optional[Dict] = None) -> classNewConnectorOrderBookMessage:
         if metadata:
             msg.update(metadata)
-        return NewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp)
 
     @classmethod
     def diff_message_from_exchange(cls,
@@ -46,7 +46,7 @@ cdef class NewConnectorOrderBook(OrderBook):
                                    metadata: Optional[Dict] = None) -> OrderBookMessage:
         if metadata:
             msg.update(metadata)
-        return NewConnectorOrderBookMessage(OrderBookMessageType.DIFF, msg, timestamp)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.DIFF, msg, timestamp)
 
     @classmethod
     def trade_message_from_exchange(cls, msg: Dict[str, any], metadata: Optional[Dict] = None):
@@ -63,25 +63,25 @@ cdef class NewConnectorOrderBook(OrderBook):
     @classmethod
     def snapshot_message_from_db(cls, record: RowProxy, metadata: Optional[Dict] = None) -> OrderBookMessage:
         msg = record.json if type(record.json)==dict else ujson.loads(record.json)
-        return NewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp=record.timestamp * 1e-3)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp=record.timestamp * 1e-3)
 
     @classmethod
     def diff_message_from_db(cls, record: RowProxy, metadata: Optional[Dict] = None) -> OrderBookMessage:
-        return NewConnectorOrderBookMessage(OrderBookMessageType.DIFF, record.json)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.DIFF, record.json)
 
     @classmethod
     def snapshot_message_from_kafka(cls, record: ConsumerRecord, metadata: Optional[Dict] = None) -> OrderBookMessage:
         msg = ujson.loads(record.value.decode())
-        return NewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp=record.timestamp * 1e-3)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.SNAPSHOT, msg, timestamp=record.timestamp * 1e-3)
 
     @classmethod
     def diff_message_from_kafka(cls, record: ConsumerRecord, metadata: Optional[Dict] = None) -> OrderBookMessage:
         msg = ujson.loads(record.value.decode())
-        return NewConnectorOrderBookMessage(OrderBookMessageType.DIFF, msg)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.DIFF, msg)
 
     @classmethod
     def trade_receive_message_from_db(cls, record: RowProxy, metadata: Optional[Dict] = None):
-        return NewConnectorOrderBookMessage(OrderBookMessageType.TRADE, record.json)
+        return classNewConnectorOrderBookMessage(OrderBookMessageType.TRADE, record.json)
 
     @classmethod
     def from_snapshot(cls, snapshot: OrderBookMessage):

@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class NewConnectorOrderStatus(Enum):
+class classNewConnectorOrderStatus(Enum):
     waiting     = 0
     ACTIVE      = 100
     processing  = 101

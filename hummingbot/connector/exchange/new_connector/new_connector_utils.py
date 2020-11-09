@@ -10,7 +10,7 @@ EXAMPLE_PAIR = "LRC-ETH"
 
 DEFAULT_FEES = [0.0, 0.2]
 
-urlNEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
+urlNEW_CONNECTOR_ROOT_API = "https://api.url_new_connector.io"
 urlNEW_CONNECTOR_WS_KEY_PATH = "/v2/ws/key"
 
 KEYS = {
@@ -42,12 +42,12 @@ KEYS = {
 
 
 def convert_from_exchange_trading_pair(exchange_trading_pair: str) -> str:
-    # new_connector returns trading pairs in the correct format natively
+    # new connector returns trading pairs in the correct format natively
     return exchange_trading_pair
 
 
 def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
-    # new_connector expects trading pairs in the same format as hummingbot internally represents them
+    # new connector expects trading pairs in the same format as hummingbot internally represents them
     return hb_trading_pair
 
 

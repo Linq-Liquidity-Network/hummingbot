@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_row import ClientOrderBookRow
-from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import NewConnectorAPITokenConfigurationDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import classNewConnectorAPITokenConfigurationDataSource
 
 s_empty_diff = np.ndarray(shape=(0, 4), dtype="float64")
 _ddaot_logger = None
@@ -17,7 +17,7 @@ _ddaot_logger = None
 cdef class classNewConnectorActiveOrderTracker:
     def __init__(self, token_configuration, active_asks=None, active_bids=None):
         super().__init__()
-        self._token_config: NewConnectorAPITokenConfigurationDataSource = token_configuration
+        self._token_config: classNewConnectorAPITokenConfigurationDataSource = token_configuration
         self._active_asks = active_asks or {}
         self._active_bids = active_bids or {}
 

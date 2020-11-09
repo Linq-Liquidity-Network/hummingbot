@@ -14,17 +14,17 @@ import ujson
 import websockets
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
-from hummingbot.connector.exchange.new_connector.new_connector_auth import NewConnectorAuth
-from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import NewConnectorAPIOrderBookDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_order_book import NewConnectorOrderBook
+from hummingbot.connector.exchange.new_connector.new_connector_auth import classNewConnectorAuth
+from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import classNewConnectorAPIOrderBookDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_order_book import classNewConnectorOrderBook
 from hummingbot.connector.exchange.new_connector.new_connector_utils import get_ws_api_key
 
-urlNEW_CONNECTOR_WS_URL = "wss://ws.new_connector.io/v2/ws"
+urlNEW_CONNECTOR_WS_URL = "wss://ws.url_new_connector.io/v2/ws"
 
-urlNEW_CONNECTOR_ROOT_API = "https://api.new_connector.io"
+urlNEW_CONNECTOR_ROOT_API = "https://api.url_new_connector.io"
 
 
-class NewConnectorAPIUserStreamDataSource(UserStreamTrackerDataSource):
+class classNewConnectorAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     _krausds_logger: Optional[HummingbotLogger] = None
 
@@ -34,16 +34,16 @@ class NewConnectorAPIUserStreamDataSource(UserStreamTrackerDataSource):
             cls._krausds_logger = logging.getLogger(__name__)
         return cls._krausds_logger
 
-    def __init__(self, orderbook_tracker_data_source: NewConnectorAPIOrderBookDataSource, new_connector_auth: NewConnectorAuth):
-        self._new_connector_auth: NewConnectorAuth = new_connector_auth
-        self._orderbook_tracker_data_source: NewConnectorAPIOrderBookDataSource = orderbook_tracker_data_source
+    def __init__(self, orderbook_tracker_data_source: classNewConnectorAPIOrderBookDataSource, new_connector_auth: classNewConnectorAuth):
+        self._new_connector_auth: classNewConnectorAuth = new_connector_auth
+        self._orderbook_tracker_data_source: classNewConnectorAPIOrderBookDataSource = orderbook_tracker_data_source
         self._shared_client: Optional[aiohttp.ClientSession] = None
         self._last_recv_time: float = 0
         super().__init__()
 
     @property
     def order_book_class(self):
-        return NewConnectorOrderBook
+        return classNewConnectorOrderBook
 
     @property
     def last_recv_time(self):

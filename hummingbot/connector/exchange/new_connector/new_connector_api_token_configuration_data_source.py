@@ -16,10 +16,10 @@ from hummingbot.core.utils.async_utils import safe_ensure_future
 TOKEN_CONFIGURATIONS_URL = '/api/v2/exchange/tokens'
 
 
-class NewConnectorAPITokenConfigurationDataSource():
+class classNewConnectorAPITokenConfigurationDataSource():
     """ Gets the token configuration on creation.
 
-        Use NewConnectorAPITokenConfigurationDataSource.create() to create.
+        Use classNewConnectorAPITokenConfigurationDataSource.create() to create.
     """
 
     def __init__(self):

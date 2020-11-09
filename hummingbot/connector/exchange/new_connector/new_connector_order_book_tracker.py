@@ -9,22 +9,22 @@ from typing import (
     Dict,
     # Set
 )
-from hummingbot.connector.exchange.new_connector.new_connector_active_order_tracker import NewConnectorActiveOrderTracker
+from hummingbot.connector.exchange.new_connector.new_connector_active_order_tracker import classNewConnectorActiveOrderTracker
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_tracker import OrderBookTracker
-from hummingbot.connector.exchange.new_connector.new_connector_order_book import NewConnectorOrderBook
-from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import NewConnectorOrderBookMessage
+from hummingbot.connector.exchange.new_connector.new_connector_order_book import classNewConnectorOrderBook
+from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import classNewConnectorOrderBookMessage
 # from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 # from hummingbot.core.data_type.remote_api_order_book_data_source import RemoteAPIOrderBookDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import NewConnectorAPIOrderBookDataSource
-# from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker_entry import NewConnectorOrderBookTrackerEntry
-from hummingbot.connector.exchange.new_connector.new_connector_auth import NewConnectorAuth
-from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import NewConnectorAPITokenConfigurationDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import classNewConnectorAPIOrderBookDataSource
+# from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker_entry import classNewConnectorOrderBookTrackerEntry
+from hummingbot.connector.exchange.new_connector.new_connector_auth import classNewConnectorAuth
+from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import classNewConnectorAPITokenConfigurationDataSource
 from hummingbot.core.data_type.order_book_message import OrderBookMessageType
 # from hummingbot.core.utils.async_utils import safe_ensure_future
 
 
-class NewConnectorOrderBookTracker(OrderBookTracker):
+class classNewConnectorOrderBookTracker(OrderBookTracker):
     _dobt_logger: Optional[HummingbotLogger] = None
 
     @classmethod
@@ -36,34 +36,34 @@ class NewConnectorOrderBookTracker(OrderBookTracker):
     def __init__(
         self,
         trading_pairs: Optional[List[str]] = None,
-        rest_api_url: str = "https://api.new_connector.io",
-        websocket_url: str = "wss://ws.new_connector.io/v2/ws",
-        token_configuration: NewConnectorAPITokenConfigurationDataSource = None,
+        rest_api_url: str = "https://api.url_new_connector.io",
+        websocket_url: str = "wss://ws.url_new_connector.io/v2/ws",
+        token_configuration: classNewConnectorAPITokenConfigurationDataSource = None,
         new_connector_auth: str = ""
     ):
         super().__init__(
-            NewConnectorAPIOrderBookDataSource(
+            classNewConnectorAPIOrderBookDataSource(
                 trading_pairs=trading_pairs,
                 rest_api_url=rest_api_url,
                 websocket_url=websocket_url,
                 token_configuration=token_configuration,
             ),
             trading_pairs)
-        self._order_books: Dict[str, NewConnectorOrderBook] = {}
-        self._saved_message_queues: Dict[str, Deque[NewConnectorOrderBookMessage]] = defaultdict(lambda: deque(maxlen=1000))
+        self._order_books: Dict[str, classNewConnectorOrderBook] = {}
+        self._saved_message_queues: Dict[str, Deque[classNewConnectorOrderBookMessage]] = defaultdict(lambda: deque(maxlen=1000))
         self._order_book_snapshot_stream: asyncio.Queue = asyncio.Queue()
         self._order_book_diff_stream: asyncio.Queue = asyncio.Queue()
         self._order_book_trade_stream: asyncio.Queue = asyncio.Queue()
         self._ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        self._new_connector_auth = NewConnectorAuth(new_connector_auth)
-        self._token_configuration: NewConnectorAPITokenConfigurationDataSource = token_configuration
+        self._new_connector_auth = classNewConnectorAuth(new_connector_auth)
+        self._token_configuration: classNewConnectorAPITokenConfigurationDataSource = token_configuration
         self.token_configuration
-        self._active_order_trackers: Dict[str, NewConnectorActiveOrderTracker] = defaultdict(lambda: NewConnectorActiveOrderTracker(self._token_configuration))
+        self._active_order_trackers: Dict[str, classNewConnectorActiveOrderTracker] = defaultdict(lambda: classNewConnectorActiveOrderTracker(self._token_configuration))
 
     @property
-    def token_configuration(self) -> NewConnectorAPITokenConfigurationDataSource:
+    def token_configuration(self) -> classNewConnectorAPITokenConfigurationDataSource:
         if not self._token_configuration:
-            self._token_configuration = NewConnectorAPITokenConfigurationDataSource.create()
+            self._token_configuration = classNewConnectorAPITokenConfigurationDataSource.create()
         return self._token_configuration
 
     @property
@@ -72,12 +72,12 @@ class NewConnectorOrderBookTracker(OrderBookTracker):
 
     async def _track_single_book(self, trading_pair: str):
         message_queue: asyncio.Queue = self._tracking_message_queues[trading_pair]
-        order_book: NewConnectorOrderBook = self._order_books[trading_pair]
-        active_order_tracker: NewConnectorActiveOrderTracker = self._active_order_trackers[trading_pair]
+        order_book: classNewConnectorOrderBook = self._order_books[trading_pair]
+        active_order_tracker: classNewConnectorActiveOrderTracker = self._active_order_trackers[trading_pair]
         while True:
             try:
-                message: NewConnectorOrderBookMessage = None
-                saved_messages: Deque[NewConnectorOrderBookMessage] = self._saved_message_queues[trading_pair]
+                message: classNewConnectorOrderBookMessage = None
+                saved_messages: Deque[classNewConnectorOrderBookMessage] = self._saved_message_queues[trading_pair]
                 # Process saved messages first if there are any
                 if len(saved_messages) > 0:
                     message = saved_messages.popleft()

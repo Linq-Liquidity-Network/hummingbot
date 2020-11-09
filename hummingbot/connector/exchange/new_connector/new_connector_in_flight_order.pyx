@@ -3,14 +3,14 @@ import json
 import time
 from typing import (Any, Dict, List, Tuple)
 from decimal import Decimal
-from hummingbot.connector.exchange.new_connector.new_connector_order_status import NewConnectorOrderStatus
+from hummingbot.connector.exchange.new_connector.new_connector_order_status import classNewConnectorOrderStatus
 from hummingbot.connector.in_flight_order_base cimport InFlightOrderBase
-from hummingbot.connector.exchange.new_connector.new_connector_exchange cimport NewConnectorExchange
+from hummingbot.connector.exchange.new_connector.new_connector_exchange cimport classNewConnectorExchange
 from hummingbot.core.event.events import (OrderFilledEvent, TradeType, OrderType, TradeFee, MarketEvent)
 
-cdef class NewConnectorInFlightOrder(InFlightOrderBase):
+cdef class classNewConnectorInFlightOrder(InFlightOrderBase):
     def __init__(self,
-                 market: NewConnectorExchange,
+                 market: classNewConnectorExchange,
                  client_order_id: str,
                  exchange_order_id: str,
                  trading_pair: str,
@@ -18,7 +18,7 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
                  trade_type: TradeType,
                  price: Decimal,
                  amount: Decimal,
-                 initial_state: NewConnectorOrderStatus,
+                 initial_state: classNewConnectorOrderStatus,
                  filled_size: Decimal,
                  filled_volume: Decimal,
                  filled_fee: Decimal,
@@ -44,19 +44,19 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
 
     @property
     def is_done(self) -> bool:
-        return self.status >= NewConnectorOrderStatus.DONE
+        return self.status >= classNewConnectorOrderStatus.DONE
 
     @property
     def is_cancelled(self) -> bool:
-        return self.status == NewConnectorOrderStatus.cancelled
+        return self.status == classNewConnectorOrderStatus.cancelled
 
     @property
     def is_failure(self) -> bool:
-        return self.status >= NewConnectorOrderStatus.failed
+        return self.status >= classNewConnectorOrderStatus.failed
 
     @property
     def is_expired(self) -> bool:
-        return self.status == NewConnectorOrderStatus.expired
+        return self.status == classNewConnectorOrderStatus.expired
 
     @property
     def description(self):
@@ -79,8 +79,8 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
         })
 
     @classmethod
-    def from_json(cls, market, data: Dict[str, Any]) -> NewConnectorInFlightOrder:
-        return NewConnectorInFlightOrder(
+    def from_json(cls, market, data: Dict[str, Any]) -> classNewConnectorInFlightOrder:
+        return classNewConnectorInFlightOrder(
             market,
             data["client_order_id"],
             data["exchange_order_id"],
@@ -89,7 +89,7 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
             TradeType[data["trade_type"]],
             Decimal(data["price"]),
             Decimal(data["amount"]),
-            NewConnectorOrderStatus[data["status"]],
+            classNewConnectorOrderStatus[data["status"]],
             Decimal(data["executed_amount_base"]),
             Decimal(data["executed_amount_quote"]),
             Decimal(data["fee_paid"]),
@@ -98,15 +98,15 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
 
     @classmethod
     def from_new_connector_order(cls,
-                            market: NewConnectorExchange,
+                            market: classNewConnectorExchange,
                             side: TradeType,
                             client_order_id: str,
                             created_at: int,
                             hash: str,
                             trading_pair: str,
                             price: float,
-                            amount: float) -> NewConnectorInFlightOrder:
-        return NewConnectorInFlightOrder(
+                            amount: float) -> classNewConnectorInFlightOrder:
+        return classNewConnectorInFlightOrder(
             market,
             client_order_id,
             hash,
@@ -115,7 +115,7 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
             side,
             Decimal(price),
             Decimal(amount),
-            NewConnectorOrderStatus.waiting,
+            classNewConnectorOrderStatus.waiting,
             Decimal(0),
             Decimal(0),
             Decimal(0),
@@ -133,7 +133,7 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
         quote_id: int = self.market.token_configuration.get_tokenid(quote)
         fee_currency_id: int = self.market.token_configuration.get_tokenid(self.fee_asset)
 
-        new_status: NewConnectorOrderStatus = NewConnectorOrderStatus[data["status"]]
+        new_status: classNewConnectorOrderStatus = classNewConnectorOrderStatus[data["status"]]
         new_executed_amount_base: Decimal = self.market.token_configuration.unpad(data["filledSize"], base_id)
         new_executed_amount_quote: Decimal = self.market.token_configuration.unpad(data["filledVolume"], quote_id)
         new_fee_paid: Decimal = self.market.token_configuration.unpad(data["filledFee"], fee_currency_id)
@@ -149,13 +149,13 @@ cdef class NewConnectorInFlightOrder(InFlightOrderBase):
 
             events.append((MarketEvent.OrderFilled, diff_base, price, diff_fee))
 
-        if not self.is_done and new_status == NewConnectorOrderStatus.cancelled:
+        if not self.is_done and new_status == classNewConnectorOrderStatus.cancelled:
             events.append((MarketEvent.OrderCancelled, None, None, None))
 
-        if not self.is_done and new_status == NewConnectorOrderStatus.expired:
+        if not self.is_done and new_status == classNewConnectorOrderStatus.expired:
             events.append((MarketEvent.OrderExpired, None, None, None))
 
-        if not self.is_done and new_status == NewConnectorOrderStatus.failed:
+        if not self.is_done and new_status == classNewConnectorOrderStatus.failed:
             events.append( (MarketEvent.OrderFailure, None, None, None) )
 
         self.status = new_status

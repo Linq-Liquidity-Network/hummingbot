@@ -20,15 +20,15 @@ from websockets.exceptions import ConnectionClosed
 
 # from hummingbot.core.utils import async_ttl_cache
 # from hummingbot.core.utils.async_utils import safe_gather
-# from hummingbot.connector.exchange.new_connector.new_connector_active_order_tracker import NewConnectorActiveOrderTracker
-from hummingbot.connector.exchange.new_connector.new_connector_order_book import NewConnectorOrderBook
-# from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker_entry import NewConnectorOrderBookTrackerEntry
-from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import NewConnectorAPITokenConfigurationDataSource
+# from hummingbot.connector.exchange.new_connector.new_connector_active_order_tracker import classNewConnectorActiveOrderTracker
+from hummingbot.connector.exchange.new_connector.new_connector_order_book import classNewConnectorOrderBook
+# from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker_entry import classNewConnectorOrderBookTrackerEntry
+from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import classNewConnectorAPITokenConfigurationDataSource
 from hummingbot.connector.exchange.new_connector.new_connector_utils import convert_from_exchange_trading_pair, get_ws_api_key
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 # from hummingbot.core.data_type.order_book_tracker_entry import OrderBookTrackerEntry
-# from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import NewConnectorOrderBookMessage
+# from hummingbot.connector.exchange.new_connector.new_connector_order_book_message import classNewConnectorOrderBookMessage
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage
 
@@ -37,11 +37,11 @@ MARKETS_URL = "/api/v2/exchange/markets"
 TICKER_URL = "/api/v2/ticker?market=:markets"
 SNAPSHOT_URL = "/api/v2/depth?market=:trading_pair"
 TOKEN_INFO_URL = "/api/v2/exchange/tokens"
-WS_URL = "wss://ws.new_connector.io/v2/ws"
-urlNEW_CONNECTOR_PRICE_URL = "https://api.new_connector.io/api/v2/ticker"
+WS_URL = "wss://ws.url_new_connector.io/v2/ws"
+urlNEW_CONNECTOR_PRICE_URL = "https://api.url_new_connector.io/api/v2/ticker"
 
 
-class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
+class classNewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     MESSAGE_TIMEOUT = 30.0
     PING_TIMEOUT = 10.0
@@ -60,25 +60,25 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
         self.WS_URL = websocket_url
         self._get_tracking_pair_done_event: asyncio.Event = asyncio.Event()
         self.order_book_create_function = lambda: OrderBook()
-        self.token_configuration: NewConnectorAPITokenConfigurationDataSource = token_configuration
+        self.token_configuration: classNewConnectorAPITokenConfigurationDataSource = token_configuration
 
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:
         async with aiohttp.ClientSession() as client:
-            resp = await client.get(f"https://api.new_connector.io{TICKER_URL}".replace(":markets", ",".join(trading_pairs)))
+            resp = await client.get(f"https://api.url_new_connector.io{TICKER_URL}".replace(":markets", ",".join(trading_pairs)))
             resp_json = await resp.json()
             return {x[0]: float(x[7]) for x in resp_json.get("data", [])}
 
     @property
-    def order_book_class(self) -> NewConnectorOrderBook:
-        return NewConnectorOrderBook
+    def order_book_class(self) -> classNewConnectorOrderBook:
+        return classNewConnectorOrderBook
 
     @property
     def trading_pairs(self) -> List[str]:
         return self._trading_pairs
 
     async def get_snapshot(self, client: aiohttp.ClientSession, trading_pair: str, level: int = 0) -> Dict[str, any]:
-        async with client.get(f"https://api.new_connector.io{SNAPSHOT_URL}&level={level}".replace(":trading_pair", trading_pair)) as response:
+        async with client.get(f"https://api.url_new_connector.io{SNAPSHOT_URL}&level={level}".replace(":trading_pair", trading_pair)) as response:
             response: aiohttp.ClientResponse = response
             if response.status != 200:
                 raise IOError(
@@ -92,7 +92,7 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
         async with aiohttp.ClientSession() as client:
             snapshot: Dict[str, Any] = await self.get_snapshot(client, trading_pair, 1000)
             snapshot_timestamp: float = time.time()
-            snapshot_msg: OrderBookMessage = NewConnectorOrderBook.snapshot_message_from_exchange(
+            snapshot_msg: OrderBookMessage = classNewConnectorOrderBook.snapshot_message_from_exchange(
                 snapshot,
                 snapshot_timestamp,
                 metadata={"trading_pair": trading_pair}
@@ -173,7 +173,7 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
                             msg = ujson.loads(raw_msg)
                             if "topic" in msg:
                                 for datum in msg["data"]:
-                                    trade_msg: OrderBookMessage = NewConnectorOrderBook.trade_message_from_exchange(datum, msg)
+                                    trade_msg: OrderBookMessage = classNewConnectorOrderBook.trade_message_from_exchange(datum, msg)
                                     output.put_nowait(trade_msg)
             except asyncio.CancelledError:
                 raise
@@ -199,7 +199,7 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         if len(raw_msg) > 4:
                             msg = ujson.loads(raw_msg)
                             if "topic" in msg:
-                                order_msg: OrderBookMessage = NewConnectorOrderBook.diff_message_from_exchange(msg)
+                                order_msg: OrderBookMessage = classNewConnectorOrderBook.diff_message_from_exchange(msg)
                                 output.put_nowait(order_msg)
             except asyncio.CancelledError:
                 raise
@@ -227,7 +227,7 @@ class NewConnectorAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         if len(raw_msg) > 4:
                             msg = ujson.loads(raw_msg)
                             if ("topic" in msg.keys()):
-                                order_msg: OrderBookMessage = NewConnectorOrderBook.snapshot_message_from_exchange(msg, msg["ts"])
+                                order_msg: OrderBookMessage = classNewConnectorOrderBook.snapshot_message_from_exchange(msg, msg["ts"])
                                 output.put_nowait(order_msg)
             except asyncio.CancelledError:
                 raise

@@ -24,12 +24,12 @@ from hummingbot.core.event.event_listener cimport EventListener
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.wallet.ethereum.web3_wallet import Web3Wallet
 from hummingbot.connector.exchange_base import ExchangeBase
-from hummingbot.connector.exchange.new_connector.new_connector_auth import NewConnectorAuth
-from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker import NewConnectorOrderBookTracker
-from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import NewConnectorAPIOrderBookDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import NewConnectorAPITokenConfigurationDataSource
-from hummingbot.connector.exchange.new_connector.new_connector_user_stream_tracker import NewConnectorUserStreamTracker
-from hummingbot.connector.exchange.new_connector.new_connector_order_status import NewConnectorOrderStatus
+from hummingbot.connector.exchange.new_connector.new_connector_auth import classNewConnectorAuth
+from hummingbot.connector.exchange.new_connector.new_connector_order_book_tracker import classNewConnectorOrderBookTracker
+from hummingbot.connector.exchange.new_connector.new_connector_api_order_book_data_source import classNewConnectorAPIOrderBookDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_api_token_configuration_data_source import classNewConnectorAPITokenConfigurationDataSource
+from hummingbot.connector.exchange.new_connector.new_connector_user_stream_tracker import classNewConnectorUserStreamTracker
+from hummingbot.connector.exchange.new_connector.new_connector_order_status import classNewConnectorOrderStatus
 from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
 )
@@ -48,7 +48,7 @@ from hummingbot.core.event.events import (
     TradeFee,
 )
 from hummingbot.logger import HummingbotLogger
-from hummingbot.connector.exchange.new_connector.new_connector_in_flight_order cimport NewConnectorInFlightOrder
+from hummingbot.connector.exchange.new_connector.new_connector_in_flight_order cimport classNewConnectorInFlightOrder
 from hummingbot.connector.trading_rule cimport TradingRule
 from hummingbot.core.utils.estimate_fee import estimate_fee
 from hummingbot.core.utils.tracking_nonce import get_tracking_nonce
@@ -79,8 +79,8 @@ API_CALL_TIMEOUT = 10.0
 # ==========================================================
 
 GET_ORDER_ROUTE = "/api/v2/order"
-MAINNET_API_REST_ENDPOINT = "https://api.new_connector.io/"
-MAINNET_WS_ENDPOINT = "wss://ws.new_connector.io/v2/ws"
+MAINNET_API_REST_ENDPOINT = "https://api.url_new_connector.io/"
+MAINNET_WS_ENDPOINT = "wss://ws.url_new_connector.io/v2/ws"
 EXCHANGE_INFO_ROUTE = "api/v2/timestamp"
 BALANCES_INFO_ROUTE = "api/v2/user/balances"
 ACCOUNT_INFO_ROUTE = "api/v2/account"
@@ -118,11 +118,11 @@ class LatchingEventResponder(EventListener):
         self._reduce()
 
 
-cdef class NewConnectorExchangeTransactionTracker(TransactionTracker):
+cdef class classNewConnectorExchangeTransactionTracker(TransactionTracker):
     cdef:
-        NewConnectorExchange _owner
+        classNewConnectorExchange _owner
 
-    def __init__(self, owner: NewConnectorExchange):
+    def __init__(self, owner: classNewConnectorExchange):
         super().__init__()
         self._owner = owner
 
@@ -130,7 +130,7 @@ cdef class NewConnectorExchangeTransactionTracker(TransactionTracker):
         TransactionTracker.c_did_timeout_tx(self, tx_id)
         self._owner.c_did_timeout_tx(tx_id)
 
-cdef class NewConnectorExchange(ExchangeBase):
+cdef class classNewConnectorExchange(ExchangeBase):
     @classmethod
     def logger(cls) -> HummingbotLogger:
         global s_logger
@@ -151,24 +151,24 @@ cdef class NewConnectorExchange(ExchangeBase):
 
         self._real_time_balance_update = True
 
-        self._new_connector_auth = NewConnectorAuth(new_connector_api_key)
-        self._token_configuration = NewConnectorAPITokenConfigurationDataSource()
+        self._new_connector_auth = classNewConnectorAuth(new_connector_api_key)
+        self._token_configuration = classNewConnectorAPITokenConfigurationDataSource()
 
         self.API_REST_ENDPOINT = MAINNET_API_REST_ENDPOINT
         self.WS_ENDPOINT = MAINNET_WS_ENDPOINT
-        self._order_book_tracker = NewConnectorOrderBookTracker(
+        self._order_book_tracker = classNewConnectorOrderBookTracker(
             trading_pairs=trading_pairs,
             rest_api_url=self.API_REST_ENDPOINT,
             websocket_url=self.WS_ENDPOINT,
             token_configuration = self._token_configuration
         )        
-        self._user_stream_tracker = NewConnectorUserStreamTracker(
+        self._user_stream_tracker = classNewConnectorUserStreamTracker(
             orderbook_tracker_data_source=self._order_book_tracker.data_source,
             new_connector_auth=self._new_connector_auth
         )
         self._user_stream_event_listener_task = None
         self._user_stream_tracker_task = None
-        self._tx_tracker = NewConnectorExchangeTransactionTracker(self)
+        self._tx_tracker = classNewConnectorExchangeTransactionTracker(self)
         self._trading_required = trading_required
         self._poll_notifier = asyncio.Event()
         self._last_timestamp = 0
@@ -207,7 +207,7 @@ cdef class NewConnectorExchange(ExchangeBase):
         }
 
     @property
-    def token_configuration(self) -> NewConnectorAPITokenConfigurationDataSource:
+    def token_configuration(self) -> classNewConnectorAPITokenConfigurationDataSource:
         return self._token_configuration
 
     # ----------------------------------------
@@ -227,7 +227,7 @@ cdef class NewConnectorExchange(ExchangeBase):
     def limit_orders(self) -> List[LimitOrder]:
         cdef:
             list retval = []
-            NewConnectorInFlightOrder new_connector_flight_order
+            classNewConnectorInFlightOrder new_connector_flight_order
 
         for in_flight_order in self._in_flight_orders.values():
             new_connector_flight_order = in_flight_order
@@ -236,7 +236,7 @@ cdef class NewConnectorExchange(ExchangeBase):
         return retval
 
     async def get_active_exchange_markets(self) -> pd.DataFrame:
-        return await NewConnectorAPIOrderBookDataSource.get_active_exchange_markets()
+        return await classNewConnectorAPIOrderBookDataSource.get_active_exchange_markets()
 
     # ----------------------------------------
     # Account Balances
@@ -252,7 +252,7 @@ cdef class NewConnectorExchange(ExchangeBase):
     # ----------------------------------------------------------
 
     @property
-    def in_flight_orders(self) -> Dict[str, NewConnectorInFlightOrder]:
+    def in_flight_orders(self) -> Dict[str, classNewConnectorInFlightOrder]:
         return self._in_flight_orders
 
     async def _get_next_order_id(self, token, force_sync = False):
@@ -341,7 +341,7 @@ cdef class NewConnectorExchange(ExchangeBase):
 
         try:
             created_at: int = int(time.time())
-            in_flight_order = NewConnectorInFlightOrder.from_new_connector_order(self, order_side, client_order_id, created_at, None, trading_pair, price, amount)
+            in_flight_order = classNewConnectorInFlightOrder.from_new_connector_order(self, order_side, client_order_id, created_at, None, trading_pair, price, amount)
             self.start_tracking(in_flight_order)
 
             try:
@@ -359,8 +359,8 @@ cdef class NewConnectorExchange(ExchangeBase):
             status = creation_response["data"]["status"]
             if status != 'NEW_ACTIVED':
                 raise Exception(f"New_Connector api returned unexpected '{status}' as status of created order")
-            # status = NewConnectorOrderStatus[creation_response["data"]["status"]]
-            # if status != NewConnectorOrderStatus.processing:
+            # status = classNewConnectorOrderStatus[creation_response["data"]["status"]]
+            # if status != classNewConnectorOrderStatus.processing:
             #     raise Exception(f"New_Connector api returned unexpected '{status}' as status of created order")
 
             new_connector_order_hash = creation_response["data"]["orderHash"]
@@ -572,7 +572,7 @@ cdef class NewConnectorExchange(ExchangeBase):
     def restore_tracking_states(self, saved_states: Dict[str, any]):
         for order_id, in_flight_repr in saved_states.iteritems():
             in_flight_json: Dict[Str, Any] = json.loads(in_flight_repr)
-            self._in_flight_orders[order_id] = NewConnectorInFlightOrder.from_json(self, in_flight_json)
+            self._in_flight_orders[order_id] = classNewConnectorInFlightOrder.from_json(self, in_flight_json)
 
     def start_tracking(self, in_flight_order):
         self._in_flight_orders[in_flight_order.client_order_id] = in_flight_order
@@ -584,7 +584,7 @@ cdef class NewConnectorExchange(ExchangeBase):
     # ----------------------------------------
     # updates to orders and balances
 
-    def _update_inflight_order(self, tracked_order: NewConnectorInFlightOrder, event: Dict[str, Any]):
+    def _update_inflight_order(self, tracked_order: classNewConnectorInFlightOrder, event: Dict[str, Any]):
         issuable_events: List[MarketEvent] = tracked_order.update(event)
 
         # Issue relevent events
@@ -717,7 +717,7 @@ cdef class NewConnectorExchange(ExchangeBase):
                     await self._set_balances([data], is_snapshot=False)
                 elif topic == 'order':
                     client_order_id: str = data['clientOrderId']
-                    tracked_order: NewConnectorInFlightOrder = self._in_flight_orders.get(client_order_id)
+                    tracked_order: classNewConnectorInFlightOrder = self._in_flight_orders.get(client_order_id)
 
                     if tracked_order is None:
                         self.logger().warning(f"Unrecognized order ID from user stream: {client_order_id}.")
