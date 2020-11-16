@@ -17,7 +17,6 @@ from hummingbot.logger import HummingbotLogger
 from hummingbot.connector.exchange.bitbay.bitbay_auth import BitbayAuth
 from hummingbot.connector.exchange.bitbay.bitbay_api_order_book_data_source import BitbayAPIOrderBookDataSource
 from hummingbot.connector.exchange.bitbay.bitbay_order_book import BitbayOrderBook
-from hummingbot.connector.exchange.bitbay.bitbay_utils import get_ws_api_key
 
 BITBAY_WS_URL = "wss://ws.bitbay.net.io/v2/ws"
 
@@ -52,8 +51,7 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
     async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
-                ws_key: str = await get_ws_api_key()
-                async with websockets.connect(f"{BITBAY_WS_URL}?wsApiKey={ws_key}") as ws:
+                async with websockets.connect(f"{BITBAY_WS_URL}") as ws:
                     ws: websockets.WebSocketClientProtocol = ws
 
                     topics = [{"topic": "order", "market": m} for m in self._orderbook_tracker_data_source.trading_pairs]

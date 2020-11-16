@@ -27,7 +27,6 @@ from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.connector.exchange.bitbay.bitbay_auth import BitbayAuth
 from hummingbot.connector.exchange.bitbay.bitbay_order_book_tracker import BitbayOrderBookTracker
 from hummingbot.connector.exchange.bitbay.bitbay_api_order_book_data_source import BitbayAPIOrderBookDataSource
-from hummingbot.connector.exchange.bitbay.bitbay_api_token_configuration_data_source import BitbayAPITokenConfigurationDataSource
 from hummingbot.connector.exchange.bitbay.bitbay_user_stream_tracker import BitbayUserStreamTracker
 from hummingbot.connector.exchange.bitbay.bitbay_order_status import BitbayOrderStatus
 from hummingbot.core.utils.async_utils import (
@@ -152,7 +151,6 @@ cdef class BitbayExchange(ExchangeBase):
         self._real_time_balance_update = True
 
         self._bitbay_auth = BitbayAuth(bitbay_api_key)
-        self._token_configuration = BitbayAPITokenConfigurationDataSource()
 
         self.API_REST_ENDPOINT = MAINNET_API_REST_ENDPOINT
         self.WS_ENDPOINT = MAINNET_WS_ENDPOINT
@@ -205,10 +203,6 @@ cdef class BitbayExchange(ExchangeBase):
             "account_balances": len(self._account_balances) > 0 if self._trading_required else True,
             "trading_rule_initialized": len(self._trading_rules) > 0 if self._trading_required else True,
         }
-
-    @property
-    def token_configuration(self) -> BitbayAPITokenConfigurationDataSource:
-        return self._token_configuration
 
     # ----------------------------------------
     # Markets & Order Books

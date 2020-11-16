@@ -10,8 +10,7 @@ EXAMPLE_PAIR = "LRC-ETH"
 
 DEFAULT_FEES = [0.0, 0.2]
 
-BITBAY_ROOT_API = "https://api.bitbay.net.io"
-BITBAY_WS_KEY_PATH = "/v2/ws/key"
+BITBAY_ROOT_API = "https://bitbay.net/API/Public/"
 
 KEYS = {
     "bitbay_accountid":
@@ -50,14 +49,3 @@ def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
     # new connector expects trading pairs in the same format as hummingbot internally represents them
     return hb_trading_pair
 
-
-async def get_ws_api_key():
-    async with aiohttp.ClientSession() as client:
-        response: aiohttp.ClientResponse = await client.get(
-            f"{BITBAY_ROOT_API}{BITBAY_WS_KEY_PATH}"
-        )
-        if response.status != 200:
-            raise IOError(f"Error getting WS key. Server responded with status: {response.status}.")
-
-        response_dict: Dict[str, Any] = await response.json()
-        return response_dict['data']

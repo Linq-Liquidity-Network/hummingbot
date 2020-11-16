@@ -9,15 +9,13 @@ from decimal import Decimal
 
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_row import ClientOrderBookRow
-from hummingbot.connector.exchange.bitbay.bitbay_api_token_configuration_data_source import BitbayAPITokenConfigurationDataSource
 
 s_empty_diff = np.ndarray(shape=(0, 4), dtype="float64")
 _ddaot_logger = None
 
 cdef class BitbayActiveOrderTracker:
-    def __init__(self, token_configuration, active_asks=None, active_bids=None):
+    def __init__(self, active_asks=None, active_bids=None):
         super().__init__()
-        self._token_config: BitbayAPITokenConfigurationDataSource = token_configuration
         self._active_asks = active_asks or {}
         self._active_bids = active_bids or {}
 
@@ -47,24 +45,23 @@ cdef class BitbayActiveOrderTracker:
 
         for bid_order in message.bids:
             order_id = str(message.timestamp)
-            price, totalAmount = self.get_rates_and_quantities(bid_order, message.content["topic"]["market"])
+            price, amount = Decimal(bid_order['ra']), Decimal(bid_order['ca'])
             order_dict = {
-                "availableAmount": Decimal(totalAmount),
+                "availableAmount": Decimal(amount),
                 "orderId": order_id
             }
             if price in self._active_bids:
-                self._active_bids[price][order_id] = order_dict
+                self._active_bids[price][order_id] += order_dict
             else:
                 self._active_bids[price] = {
                     order_id: order_dict
                 }
 
         for ask_order in message.asks:
-            price = Decimal(ask_order[0])
+            price, amount = Decimal(ask_order['ra']), Decimal(ask_order['ca'])
             order_id = str(message.timestamp)
-            price, totalAmount = self.get_rates_and_quantities(ask_order, message.content["topic"]["market"])
             order_dict = {
-                "availableAmount": Decimal(totalAmount),
+                "availableAmount": amount,
                 "orderId": order_id
             }
 
@@ -101,17 +98,10 @@ cdef class BitbayActiveOrderTracker:
             asks = asks.reshape((0, 4))
         return bids, asks
 
-    def get_rates_and_quantities(self, entry, market) -> tuple:
-        pair_tuple = tuple(market.split('-'))
-        tokenid = self._token_config.get_tokenid(pair_tuple[0])
-        return float(entry[0]), float(self._token_config.unpad(entry[1], tokenid))
-
     cdef tuple c_convert_diff_message_to_np_arrays(self, object message):
         cdef:
             dict content = message.content
-            list bid_entries = content["data"]["bids"]
-            list ask_entries = content["data"]["asks"]
-            str market = content["topic"]["market"]
+            str market = content["trading_pair"]
             str order_id
             str order_side
             str price_raw
@@ -119,29 +109,33 @@ cdef class BitbayActiveOrderTracker:
             dict order_dict
             double timestamp = message.timestamp
             double quantity = 0
+
         bids = s_empty_diff
         asks = s_empty_diff
-        if len(bid_entries) > 0:
+        price = content["price"]
+        quantity = content["amount"]
+        order_side = content["entryType"]
+
+        if order_side == 'Buy':
             bids = np.array(
                 [[timestamp,
                   float(price),
                   float(quantity),
-                  message.content["endVersion"]]
-                 for price, quantity in [self.get_rates_and_quantities(entry, market) for entry in bid_entries]],
+                  timestamp]],
                 dtype="float64",
                 ndmin=2
             )
 
-        if len(ask_entries) > 0:
+        if order_side == 'Sell':
             asks = np.array(
                 [[timestamp,
                   float(price),
                   float(quantity),
-                  message.content["endVersion"]]
-                 for price, quantity in [self.get_rates_and_quantities(entry, market) for entry in ask_entries]],
+                  timestamp]],
                 dtype="float64",
                 ndmin=2
             )
+
         return bids, asks
 
     def convert_diff_message_to_order_book_row(self, message):

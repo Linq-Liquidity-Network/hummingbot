@@ -19,7 +19,6 @@ from hummingbot.connector.exchange.bitbay.bitbay_order_book_message import Bitba
 from hummingbot.connector.exchange.bitbay.bitbay_api_order_book_data_source import BitbayAPIOrderBookDataSource
 # from hummingbot.connector.exchange.bitbay.bitbay_order_book_tracker_entry import BitbayOrderBookTrackerEntry
 from hummingbot.connector.exchange.bitbay.bitbay_auth import BitbayAuth
-from hummingbot.connector.exchange.bitbay.bitbay_api_token_configuration_data_source import BitbayAPITokenConfigurationDataSource
 from hummingbot.core.data_type.order_book_message import OrderBookMessageType
 # from hummingbot.core.utils.async_utils import safe_ensure_future
 
@@ -38,7 +37,6 @@ class BitbayOrderBookTracker(OrderBookTracker):
         trading_pairs: Optional[List[str]] = None,
         rest_api_url: str = "https://api.bitbay.net.io",
         websocket_url: str = "wss://ws.bitbay.net.io/v2/ws",
-        token_configuration: BitbayAPITokenConfigurationDataSource = None,
         bitbay_auth: str = ""
     ):
         super().__init__(
@@ -46,7 +44,6 @@ class BitbayOrderBookTracker(OrderBookTracker):
                 trading_pairs=trading_pairs,
                 rest_api_url=rest_api_url,
                 websocket_url=websocket_url,
-                token_configuration=token_configuration,
             ),
             trading_pairs)
         self._order_books: Dict[str, BitbayOrderBook] = {}
@@ -56,15 +53,7 @@ class BitbayOrderBookTracker(OrderBookTracker):
         self._order_book_trade_stream: asyncio.Queue = asyncio.Queue()
         self._ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
         self._bitbay_auth = BitbayAuth(bitbay_auth)
-        self._token_configuration: BitbayAPITokenConfigurationDataSource = token_configuration
-        self.token_configuration
-        self._active_order_trackers: Dict[str, BitbayActiveOrderTracker] = defaultdict(lambda: BitbayActiveOrderTracker(self._token_configuration))
-
-    @property
-    def token_configuration(self) -> BitbayAPITokenConfigurationDataSource:
-        if not self._token_configuration:
-            self._token_configuration = BitbayAPITokenConfigurationDataSource.create()
-        return self._token_configuration
+        self._active_order_trackers: Dict[str, BitbayActiveOrderTracker] = defaultdict(lambda: BitbayActiveOrderTracker())
 
     @property
     def exchange_name(self) -> str:
@@ -77,7 +66,9 @@ class BitbayOrderBookTracker(OrderBookTracker):
         while True:
             try:
                 message: BitbayOrderBookMessage = None
+                
                 saved_messages: Deque[BitbayOrderBookMessage] = self._saved_message_queues[trading_pair]
+
                 # Process saved messages first if there are any
                 if len(saved_messages) > 0:
                     message = saved_messages.popleft()
@@ -86,7 +77,7 @@ class BitbayOrderBookTracker(OrderBookTracker):
 
                 if message.type is OrderBookMessageType.DIFF:
                     bids, asks = active_order_tracker.convert_diff_message_to_order_book_row(message)
-                    order_book.apply_diffs(bids, asks, message.content["startVersion"])
+                    order_book.apply_diffs(bids, asks, message.timestamp)
 
                 elif message.type is OrderBookMessageType.SNAPSHOT:
                     s_bids, s_asks = active_order_tracker.convert_snapshot_message_to_order_book_row(message)

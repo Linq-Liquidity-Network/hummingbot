@@ -10,6 +10,8 @@ from typing import (
 )
 import ujson
 
+from decimal import Decimal
+
 from hummingbot.logger import HummingbotLogger
 from hummingbot.connector.exchange.bitbay.bitbay_order_book_message import BitbayOrderBookMessage
 from hummingbot.core.event.events import TradeType
@@ -44,20 +46,25 @@ cdef class BitbayOrderBook(OrderBook):
                                    msg: Dict[str, any],
                                    timestamp: Optional[float] = None,
                                    metadata: Optional[Dict] = None) -> OrderBookMessage:
-        if metadata:
-            msg.update(metadata)
+        if msg["action"] == "remove":
+            msg["amount"] = Decimal('0')
+        else:
+            msg["amount"] = Decimal(msg["state"]["ca"])
+
+        msg["price"] = msg["rate"]
+        msg["trading_pair"] = msg["marketCode"]
         return BitbayOrderBookMessage(OrderBookMessageType.DIFF, msg, timestamp)
 
     @classmethod
     def trade_message_from_exchange(cls, msg: Dict[str, any], metadata: Optional[Dict] = None):
-        ts = metadata["ts"]
+        ts = metadata["timestamp"]
         return OrderBookMessage(OrderBookMessageType.TRADE, {
-            "trading_pair": metadata["topic"]["market"],
-            "trade_type": float(TradeType.SELL.value) if (msg[2] == "SELL") else float(TradeType.BUY.value),
-            "trade_id": msg[1],
+            "trading_pair": metadata["trading_pair"],
+            "trade_type": float(TradeType.BUY.value) if (msg["ty"] == "Buy") else float(TradeType.SELL.value),
+            "trade_id": msg["id"],
             "update_id": ts,
-            "price": msg[4],
-            "amount": msg[3]
+            "price": msg["r"],
+            "amount": msg["a"]
         }, timestamp=ts * 1e-3)
 
     @classmethod
