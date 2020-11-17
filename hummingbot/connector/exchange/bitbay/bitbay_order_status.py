@@ -2,13 +2,13 @@ from enum import Enum
 
 
 class BitbayOrderStatus(Enum):
-    waiting     = 0
+    active   = 0
     ACTIVE      = 100
-    processing  = 101
+    accepted  = 101
     cancelling  = 200
     DONE        = 300
-    processed   = 301
-    failed      = 400
+    triggered  = 301
+    rejected      = 400
     cancelled   = 402
     expired     = 403
 
