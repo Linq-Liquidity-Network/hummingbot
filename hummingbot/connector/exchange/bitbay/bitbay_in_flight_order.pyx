@@ -129,14 +129,13 @@ cdef class BitbayInFlightOrder(InFlightOrderBase):
         quote: str
         trading_pair: str = data["market"]
         (base, quote) = self.market.split_trading_pair(trading_pair)
-        base_id: int = self.market.token_configuration.get_tokenid(base)
-        quote_id: int = self.market.token_configuration.get_tokenid(quote)
-        fee_currency_id: int = self.market.token_configuration.get_tokenid(self.fee_asset)
 
         new_status: BitbayOrderStatus = BitbayOrderStatus[data["status"]]
-        new_executed_amount_base: Decimal = self.market.token_configuration.unpad(data["filledSize"], base_id)
-        new_executed_amount_quote: Decimal = self.market.token_configuration.unpad(data["filledVolume"], quote_id)
-        new_fee_paid: Decimal = self.market.token_configuration.unpad(data["filledFee"], fee_currency_id)
+        start_amount_base: Decimal = Decimal(data["startAmount"])
+        current_amount_base: Decimal = Decimal(data["currentAmount"])
+        new_executed_amount_base: Decimal = start_amount_base - current_amount_base
+        new_executed_amount_quote: Decimal = Decimal(data["rate"]) * new_executed_amount_base
+        new_fee_paid: Decimal = self.market.get_fee(base, quote, self.order_type, self.trade_type, executed_amount_base, Decimal(data["rate"]))
 
         if new_executed_amount_base > self.executed_amount_base or new_executed_amount_quote > self.executed_amount_quote:
             diff_base: Decimal = new_executed_amount_base - self.executed_amount_base

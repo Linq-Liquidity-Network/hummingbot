@@ -27,6 +27,7 @@ cdef class BitbayExchange(ExchangeBase):
         object _exchange_rates
         object _pending_approval_tx_hashes
         dict _in_flight_orders
+        dict _in_flight_orders_by_exchange_id
         dict _next_order_id
         object _order_id_lock
         dict _bitbay_tokenids

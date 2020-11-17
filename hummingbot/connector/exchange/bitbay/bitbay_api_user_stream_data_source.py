@@ -7,7 +7,8 @@ from typing import (
     AsyncIterable,
     Dict,
     Optional,
-    Any
+    Any,
+    List
 )
 import time
 import ujson
@@ -18,9 +19,9 @@ from hummingbot.connector.exchange.bitbay.bitbay_auth import BitbayAuth
 from hummingbot.connector.exchange.bitbay.bitbay_api_order_book_data_source import BitbayAPIOrderBookDataSource
 from hummingbot.connector.exchange.bitbay.bitbay_order_book import BitbayOrderBook
 
-BITBAY_WS_URL = "wss://ws.bitbay.net.io/v2/ws"
+BITBAY_WS_URL = "wss://api.bitbay.net/websocket"
 
-BITBAY_ROOT_API = "https://api.bitbay.net.io"
+BITBAY_ROOT_API = "https://api.bitbay.net/rest"
 
 
 class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -33,11 +34,12 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
             cls._krausds_logger = logging.getLogger(__name__)
         return cls._krausds_logger
 
-    def __init__(self, orderbook_tracker_data_source: BitbayAPIOrderBookDataSource, bitbay_auth: BitbayAuth):
+    def __init__(self, orderbook_tracker_data_source: BitbayAPIOrderBookDataSource, bitbay_auth: BitbayAuth, trading_pairs: Optional[List[str]]):
         self._bitbay_auth: BitbayAuth = bitbay_auth
         self._orderbook_tracker_data_source: BitbayAPIOrderBookDataSource = orderbook_tracker_data_source
         self._shared_client: Optional[aiohttp.ClientSession] = None
         self._last_recv_time: float = 0
+        self._trading_pairs = trading_pairs
         super().__init__()
 
     @property
@@ -53,17 +55,26 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
             try:
                 async with websockets.connect(f"{BITBAY_WS_URL}") as ws:
                     ws: websockets.WebSocketClientProtocol = ws
-
-                    topics = [{"topic": "order", "market": m} for m in self._orderbook_tracker_data_source.trading_pairs]
-                    topics.append({
-                        "topic": "account"
-                    })
+                    creds = self._bitbay_auth.generate_auth_dict()
+                    
+                    for pair in self._trading_pairs:
+                        subscribe_request: Dict[str, Any] = {
+                            "action": "subscribe-private",
+                            "module": "trading",
+                            "path": f"offers/{pair}",
+                            "hashSignature": f"{creds['hashSignature']}",
+                            "publicKey": f"{creds['publicKey']}",
+                            "requestTimestamp": f"{creds['requestTimestamp']}"
+                        }
+                        await ws.send(ujson.dumps(subscribe_request))
 
                     subscribe_request: Dict[str, Any] = {
-                        "op": "sub",
-                        "apiKey": self._bitbay_auth.generate_auth_dict()["X-API-KEY"],
-                        "unsubscribeAll": True,
-                        "topics": topics
+                        "action": "subscribe-private",
+                        "module": "balances",
+                        "path": "balance/bitbay/updatefunds",
+                        "hashSignature": f"{creds['hashSignature']}",
+                        "publicKey": f"{creds['publicKey']}",
+                        "requestTimestamp": f"{creds['requestTimestamp']}"
                     }
                     await ws.send(ujson.dumps(subscribe_request))
 
@@ -71,9 +82,10 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         self._last_recv_time = time.time()
 
                         diff_msg = ujson.loads(raw_msg)
-                        if 'op' in diff_msg:
-                            continue  # These messages are for control of the stream, so skip sending them to the market class
-                        output.put_nowait(diff_msg)
+                        print(diff_msg)
+                        if 'action' in diff_msg:
+                            if diff_msg['action'] == 'push':
+                                output.put_nowait(diff_msg)
             except asyncio.CancelledError:
                 raise
             except Exception:

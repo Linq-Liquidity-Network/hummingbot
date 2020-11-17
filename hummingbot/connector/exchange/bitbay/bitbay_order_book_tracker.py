@@ -18,7 +18,6 @@ from hummingbot.connector.exchange.bitbay.bitbay_order_book_message import Bitba
 # from hummingbot.core.data_type.remote_api_order_book_data_source import RemoteAPIOrderBookDataSource
 from hummingbot.connector.exchange.bitbay.bitbay_api_order_book_data_source import BitbayAPIOrderBookDataSource
 # from hummingbot.connector.exchange.bitbay.bitbay_order_book_tracker_entry import BitbayOrderBookTrackerEntry
-from hummingbot.connector.exchange.bitbay.bitbay_auth import BitbayAuth
 from hummingbot.core.data_type.order_book_message import OrderBookMessageType
 # from hummingbot.core.utils.async_utils import safe_ensure_future
 
@@ -52,7 +51,6 @@ class BitbayOrderBookTracker(OrderBookTracker):
         self._order_book_diff_stream: asyncio.Queue = asyncio.Queue()
         self._order_book_trade_stream: asyncio.Queue = asyncio.Queue()
         self._ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        self._bitbay_auth = BitbayAuth(bitbay_auth)
         self._active_order_trackers: Dict[str, BitbayActiveOrderTracker] = defaultdict(lambda: BitbayActiveOrderTracker())
 
     @property

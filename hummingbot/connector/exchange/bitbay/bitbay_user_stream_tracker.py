@@ -3,7 +3,8 @@
 import asyncio
 import logging
 from typing import (
-    Optional
+    Optional,
+    List
 )
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
@@ -28,19 +29,22 @@ class BitbayUserStreamTracker(UserStreamTracker):
 
     def __init__(self,
                  orderbook_tracker_data_source: BitbayAPIOrderBookDataSource,
-                 bitbay_auth: BitbayAuth):
+                 bitbay_auth: BitbayAuth,
+                 trading_pairs: Optional[List[str]] = None):
         super().__init__()
         self._ev_loop: asyncio.events.AbstractEventLoop = asyncio.get_event_loop()
         self._data_source: Optional[UserStreamTrackerDataSource] = None
         self._user_stream_tracking_task: Optional[asyncio.Task] = None
         self._orderbook_tracker_data_source = orderbook_tracker_data_source
         self._bitbay_auth: BitbayAuth = bitbay_auth
+        self._trading_pairs = trading_pairs
 
     @property
     def data_source(self) -> UserStreamTrackerDataSource:
         if not self._data_source:
             self._data_source = BitbayAPIUserStreamDataSource(orderbook_tracker_data_source=self._orderbook_tracker_data_source,
-                                                                bitbay_auth=self._bitbay_auth)
+                                                                bitbay_auth=self._bitbay_auth,
+                                                                trading_pairs=self._trading_pairs)
         return self._data_source
 
     @property

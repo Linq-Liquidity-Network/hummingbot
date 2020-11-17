@@ -13,18 +13,6 @@ DEFAULT_FEES = [0.0, 0.2]
 BITBAY_ROOT_API = "https://bitbay.net/API/Public/"
 
 KEYS = {
-    "bitbay_accountid":
-        ConfigVar(key="bitbay_accountid",
-                  prompt="Enter your bitbay account id >>> ",
-                  required_if=using_exchange("bitbay"),
-                  is_secure=True,
-                  is_connect_key=True),
-    "bitbay_exchangeid":
-        ConfigVar(key="bitbay_exchangeid",
-                  prompt="Enter the bitbay exchange id >>> ",
-                  required_if=using_exchange("bitbay"),
-                  is_secure=True,
-                  is_connect_key=True),
     "bitbay_private_key":
         ConfigVar(key="bitbay_private_key",
                   prompt="Enter your bitbay private key >>> ",
