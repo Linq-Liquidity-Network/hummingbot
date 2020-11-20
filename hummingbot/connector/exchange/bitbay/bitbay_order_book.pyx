@@ -57,7 +57,7 @@ cdef class BitbayOrderBook(OrderBook):
 
     @classmethod
     def trade_message_from_exchange(cls, msg: Dict[str, any], metadata: Optional[Dict] = None):
-        ts = metadata["timestamp"]
+        ts = float(metadata["timestamp"])
         return OrderBookMessage(OrderBookMessageType.TRADE, {
             "trading_pair": metadata["trading_pair"],
             "trade_type": float(TradeType.BUY.value) if (msg["ty"] == "Buy") else float(TradeType.SELL.value),

@@ -82,7 +82,6 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
                         self._last_recv_time = time.time()
 
                         diff_msg = ujson.loads(raw_msg)
-                        print(diff_msg)
                         if 'action' in diff_msg:
                             if diff_msg['action'] == 'push':
                                 output.put_nowait(diff_msg)
@@ -114,6 +113,6 @@ class BitbayAPIUserStreamDataSource(UserStreamTrackerDataSource):
         finally:
             await ws.close()
 
-    async def stop(self):
-        if self._shared_client is not None and not self._shared_client.closed:
-            await self._shared_client.close()
+    #async def stop(self):
+    #    if self._shared_client is not None and not self._shared_client.closed:
+    #        await self._shared_client.close()

@@ -125,18 +125,38 @@ cdef class BitbayInFlightOrder(InFlightOrderBase):
     def update(self, data: Dict[str, Any]) -> List[Any]:
         events: List[Any] = []
 
+        if "state" in data:
+            details = data['state']
+        else:
+            details = data
         base: str
         quote: str
         trading_pair: str = data["market"]
         (base, quote) = self.market.split_trading_pair(trading_pair)
 
-        new_status: BitbayOrderStatus = BitbayOrderStatus[data["status"]]
-        start_amount_base: Decimal = Decimal(data["startAmount"])
-        current_amount_base: Decimal = Decimal(data["currentAmount"])
+        start_amount_base: Decimal = Decimal(details["startAmount"])
+        current_amount_base: Decimal = Decimal(details["currentAmount"])
         new_executed_amount_base: Decimal = start_amount_base - current_amount_base
-        new_executed_amount_quote: Decimal = Decimal(data["rate"]) * new_executed_amount_base
-        new_fee_paid: Decimal = self.market.get_fee(base, quote, self.order_type, self.trade_type, executed_amount_base, Decimal(data["rate"]))
+        new_executed_amount_quote: Decimal = Decimal(details["rate"]) * new_executed_amount_base
+        new_fee_rate: Decimal = self.market.get_fee(base, quote, self.order_type, self.trade_type, new_executed_amount_base, Decimal(data["rate"])).percent
+        new_fee_paid = new_executed_amount_base * new_fee_rate
 
+        if "action" in data:
+            if data['action'] == 'update':
+                new_status = BitbayOrderStatus['accepted']
+                if current_amount_base == Decimal('0'):
+                    new_status = BitbayOrderStatus['filled']
+            elif data['action'] == 'remove':
+                if current_amount_base > Decimal('0'):
+                    new_status = BitbayOrderStatus['cancelled']
+                else:
+                    new_status = BitbayOrderStatus['filled']
+        else:
+            if current_amount_base == Decimal('0'):
+                new_status = BitbayOrderStatus['filled']
+            else:
+                new_status = BitbayOrderStatus['accepted']
+        
         if new_executed_amount_base > self.executed_amount_base or new_executed_amount_quote > self.executed_amount_quote:
             diff_base: Decimal = new_executed_amount_base - self.executed_amount_base
             diff_quote: Decimal = new_executed_amount_quote - self.executed_amount_quote
@@ -164,6 +184,6 @@ cdef class BitbayInFlightOrder(InFlightOrderBase):
         self.fee_paid = new_fee_paid
 
         if self.exchange_order_id is None:
-            self.update_exchange_order_id(data.get('hash', None))
+            self.update_exchange_order_id(data.get('id', None))
 
         return events

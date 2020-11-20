@@ -2,15 +2,16 @@ from enum import Enum
 
 
 class BitbayOrderStatus(Enum):
-    active   = 0
+    waiting    = 0
     ACTIVE      = 100
     accepted  = 101
     cancelling  = 200
     DONE        = 300
-    triggered  = 301
+    filled  = 301
     rejected      = 400
     cancelled   = 402
     expired     = 403
+    failed      = 500
 
     def __ge__(self, other):
         if self.__class__ is other.__class__:

@@ -33,7 +33,7 @@ class BitbayAuth:
     def auth_sig(self, nonce: str, payload: str) -> str:
         sig = hmac.new(
             self.secret_key.encode('utf8'),
-            '{}{}'.format(self.api_key,nonce, payload).encode('utf8'),
+            '{}{}{}'.format(self.api_key,nonce, payload).encode('utf8'),
             hashlib.sha512
         ).hexdigest()
         return sig

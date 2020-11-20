@@ -32,6 +32,7 @@ from hummingbot.connector.exchange.bitbay.bitbay_user_stream_tracker import Bitb
 from hummingbot.connector.exchange.bitbay.bitbay_order_status import BitbayOrderStatus
 from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
+    safe_gather,
 )
 from hummingbot.core.event.events import (
     MarketEvent,
@@ -78,7 +79,7 @@ API_CALL_TIMEOUT = 10.0
 
 # ==========================================================
 
-GET_ORDERS_ROUTE = "/trading/offer/:trading_pair"
+GET_ORDERS_ROUTE = "/trading/offer"
 MAINNET_API_REST_ENDPOINT = "https://api.bitbay.net/rest"
 MAINNET_WS_ENDPOINT = "wss://api.bitbay.net/websocket"
 EXCHANGE_INFO_ROUTE = "/trading/ticker"
@@ -86,6 +87,32 @@ BALANCES_INFO_ROUTE = "/balances/BITBAY/balance"
 ORDER_ROUTE = "/trading/offer/:trading_pair"
 ORDER_CANCEL_ROUTE = "/trading/offer/:trading_pair/:id/:type/:price"
 UNRECOGNIZED_ORDER_DEBOUCE = 20  # seconds
+
+class LatchingEventResponder(EventListener):
+    def __init__(self, callback : any, num_expected : int):
+        super().__init__()
+        self._callback = callback
+        self._completed = asyncio.Event()
+        self._num_remaining = num_expected
+
+    def __call__(self, arg : any):
+        if self._callback(arg):
+            self._reduce()
+
+    def _reduce(self):
+        self._num_remaining -= 1
+        if self._num_remaining <= 0:
+            self._completed.set()
+
+    async def wait_for_completion(self, timeout : float):
+        try:
+            await asyncio.wait_for(self._completed.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            pass
+        return self._completed.is_set()
+
+    def cancel_one(self):
+        self._reduce()
 
 cdef class BitbayExchange(ExchangeBase):
     @classmethod
@@ -103,11 +130,8 @@ cdef class BitbayExchange(ExchangeBase):
                  trading_required: bool = True):
 
         super().__init__()
-
         self._real_time_balance_update = True
-
         self._bitbay_auth = BitbayAuth(api_key=bitbay_api_key, secret_key=bitbay_private_key)
-
         self.API_REST_ENDPOINT = MAINNET_API_REST_ENDPOINT
         self.WS_ENDPOINT = MAINNET_WS_ENDPOINT
         self._order_book_tracker = BitbayOrderBookTracker(
@@ -128,11 +152,12 @@ cdef class BitbayExchange(ExchangeBase):
         self._poll_interval = poll_interval
         self._shared_client = None
         self._polling_update_task = None
+        self._awaiting_response = 0
+        self._user_stream_message_queue = []
 
         # State
         self._lock = asyncio.Lock()
         self._trading_rules = {}
-        self._pending_approval_tx_hashes = set()
         self._in_flight_orders = {}
         self._in_flight_orders_by_exchange_id = {}
         self._next_order_id = {}
@@ -215,20 +240,20 @@ cdef class BitbayExchange(ExchangeBase):
         base, quote = trading_pair.split('-')
 
         order = {
-            "amount": amount,
-            "rate": price,
+            "amount": float(amount),
+            "rate": float(price),
+            "price": None,
             "offerType": order_side,
             "mode": "limit",
             "postOnly": False,
             "fillOrKill": False
         }
-
         if order_type is OrderType.LIMIT_MAKER:
             order["postOnly"] = True
 
-        headers = self.generate_request_headers(str(order))
+        headers = self.generate_request_headers(json.dumps(order))
 
-        return await self.api_request("POST", ORDER_ROUTE, params=headers, data=order, secure=True)
+        return await self.api_request("POST", f"{ORDER_ROUTE}".replace(":trading_pair",trading_pair), headers=headers, data=json.dumps(order))
 
     async def execute_order(self, order_side, client_order_id, trading_pair, amount, order_type, price):
         """
@@ -236,6 +261,7 @@ cdef class BitbayExchange(ExchangeBase):
         validates the order against the trading rules before placing this order.
         """
         # Quantize order
+
         amount = self.c_quantize_order_amount(trading_pair, amount)
         price = self.c_quantize_order_price(trading_pair, price)
 
@@ -257,15 +283,15 @@ cdef class BitbayExchange(ExchangeBase):
             created_at: int = int(time.time())
             in_flight_order = BitbayInFlightOrder.from_bitbay_order(self, order_side, client_order_id, created_at, None, trading_pair, price, amount)
             self.start_tracking(in_flight_order)
-
             try:
+                self._awaiting_response += 1
                 creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
             except asyncio.exceptions.TimeoutError:
                 # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status 
-                # updates mark this as cancelled if it doesn't actually exist.             
-                return
-                
+                # updates mark this as cancelled if it doesn't actually exist.
+                self.logger().warning("Timed OUT!")
+
             # Verify the response from the exchange
             if "status" not in creation_response.keys():
                 raise Exception(creation_response['comment'])
@@ -273,14 +299,11 @@ cdef class BitbayExchange(ExchangeBase):
             status = creation_response["status"]
             if status != 'Ok':
                 raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
-            # status = BitbayOrderStatus[creation_response["data"]["status"]]
-            # if status != BitbayOrderStatus.processing:
-            #     raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
 
             bitbay_order_hash = creation_response["offerId"]
             in_flight_order.update_exchange_order_id(bitbay_order_hash)
-            self._in_flight_orders_by_exchange_id[bitbay_order_hash] = in_flight_order 
-
+            self._in_flight_orders_by_exchange_id[bitbay_order_hash] = in_flight_order
+            self._awaiting_response -= 1
             # Begin tracking order
             self.logger().info(
                 f"Created {in_flight_order.description} order {client_order_id} for {amount} {trading_pair}.")
@@ -291,7 +314,7 @@ cdef class BitbayExchange(ExchangeBase):
             self.logger().info(e)
 
             # Stop tracking this order
-            self.stop_tracking(client_order_id)
+            self.c_stop_tracking_order(client_order_id)
             self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
 
     async def execute_buy(self,
@@ -307,7 +330,7 @@ cdef class BitbayExchange(ExchangeBase):
                                  BuyOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
         except ValueError as e:
             # Stop tracking this order
-            self.stop_tracking(order_id)
+            self.c_stop_tracking_order(order_id)
             self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), order_id, order_type))
             raise e
 
@@ -323,7 +346,7 @@ cdef class BitbayExchange(ExchangeBase):
                                  SellOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
         except ValueError as e:
             # Stop tracking this order
-            self.stop_tracking(order_id)
+            self.c_stop_tracking_order(order_id)
             self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), order_id, order_type))
             raise e
 
@@ -356,14 +379,15 @@ cdef class BitbayExchange(ExchangeBase):
 
         try:
             trading_pair = in_flight_order.trading_pair
-            exchange_id = in_flight_order.exchange_id
+            exchange_id = in_flight_order.exchange_order_id
             trade_type = "buy" if in_flight_order.trade_type == TradeType.BUY else "sell"
             price = str(in_flight_order.price)
             url = f"{ORDER_CANCEL_ROUTE}".replace(":trading_pair/:id/:type/:price",
                                               f"{trading_pair}/{exchange_id}/{trade_type}/{price}")
             headers = self.generate_request_headers()
 
-            res = await self.api_request("DELETE", ORDER_CANCEL_ROUTE, params=headers, secure=True)
+            res = await self.api_request("DELETE", url, headers=headers, secure=True)
+
             status = res['status']
             errors = res['errors']
 
@@ -372,6 +396,8 @@ cdef class BitbayExchange(ExchangeBase):
                 self.c_trigger_event(ORDER_CANCELLED_EVENT,cancellation_event)
             elif len(errors) > 0 and not ('OFFER_NOT_FOUND' in errors):
                 raise Exception(f"Cancel order returned errors {errors}")
+            else:
+                self.c_trigger_event(ORDER_CANCELLED_EVENT,cancellation_event)
             
             return True
 
@@ -384,11 +410,13 @@ cdef class BitbayExchange(ExchangeBase):
         safe_ensure_future(self.cancel_order(client_order_id))
 
     cdef c_stop_tracking_order(self, str order_id):
+        cdef:
+            str exchange_id
         if order_id in self._in_flight_orders:
-            exchange_id = self._in_flight_orders[order_id].exchange_id
-            del self._in_flight_orders[order_id]
+            exchange_id = self._in_flight_orders[order_id].exchange_order_id
             if exchange_id in self._in_flight_orders_by_exchange_id:
                 del self._in_flight_orders_by_exchange_id[exchange_id]
+            del self._in_flight_orders[order_id]
 
     async def cancel_all(self, timeout_seconds: float) -> List[CancellationResult]:
         cancellation_queue = self._in_flight_orders.copy()
@@ -404,6 +432,9 @@ cdef class BitbayExchange(ExchangeBase):
                 order_status[oce.order_id] = True
                 return True
             return False
+            
+        cancel_verifier = LatchingEventResponder(set_cancellation_status, len(cancellation_queue))
+        self.c_add_listener(ORDER_CANCELLED_EVENT, cancel_verifier)
 
         for order_id, in_flight in cancellation_queue.iteritems():
             try:            
@@ -433,19 +464,16 @@ cdef class BitbayExchange(ExchangeBase):
     # ----------------------------------------------------------
 
     async def start_network(self):
-        await self.stop_network()
-        self._order_book_tracker.start()
-
+        await self.stop_network()        
+        self._order_book_tracker.start()        
         if self._trading_required:
-            exchange_info = await self.api_request("GET", EXCHANGE_INFO_ROUTE)
-
-        self._polling_update_task = safe_ensure_future(self._polling_update())
-        self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
+            exchange_info = await self.api_request("GET", EXCHANGE_INFO_ROUTE)        
+        self._polling_update_task = safe_ensure_future(self._polling_update())        
+        self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())        
         self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
 
     async def stop_network(self):
         self._order_book_tracker.stop()
-        self._pending_approval_tx_hashes.clear()
         self._polling_update_task = None
         if self._user_stream_tracker_task is not None:
             self._user_stream_tracker_task.cancel()
@@ -481,10 +509,6 @@ cdef class BitbayExchange(ExchangeBase):
     def start_tracking(self, in_flight_order):
         self._in_flight_orders[in_flight_order.client_order_id] = in_flight_order
 
-    def stop_tracking(self, client_order_id):
-        if client_order_id in self._in_flight_orders:
-            del self._in_flight_orders[client_order_id]
-
     # ----------------------------------------
     # updates to orders and balances
 
@@ -506,7 +530,7 @@ cdef class BitbayExchange(ExchangeBase):
                                                       tracked_order.client_order_id))
             elif market_event == MarketEvent.OrderCancelled:
                 self.logger().info(f"Successfully cancelled order {tracked_order.client_order_id}")
-                self.stop_tracking(tracked_order.client_order_id)
+                self.c_stop_tracking_order(tracked_order.client_order_id)
                 self.c_trigger_event(ORDER_CANCELLED_EVENT,
                                      OrderCancelledEvent(self._current_timestamp,
                                                          tracked_order.client_order_id))
@@ -569,7 +593,6 @@ cdef class BitbayExchange(ExchangeBase):
                     total_amount: Decimal = Decimal(data['totalFunds'])
                     token: str = data['currency']
                     available_amount: Decimal = Decimal(data['availableFunds'])
-
                     self._account_balances[token] = total_amount
                     self._account_available_balances[token] = available_amount
 
@@ -597,28 +620,30 @@ cdef class BitbayExchange(ExchangeBase):
         async for event_message in self._iter_user_event_queue():
             try:
                 event: Dict[str, Any] = event_message
-                topic: str = event['topic']['topic']
-                data: Dict[str, Any] = event['data']
-                if topic == 'account':
+                topic: str = event['topic'].split('/')[1]
+                data: Dict[str, Any] = event['message']
+                if topic == 'balance':
                     await self._set_balances([data], is_snapshot=False)
-                elif topic == 'order':
-                    client_order_id: str = data['clientOrderId']
-                    tracked_order: BitbayInFlightOrder = self._in_flight_orders.get(client_order_id)
+                elif topic == 'offers':
+                    if self._awaiting_response > 0:
+                        self._user_stream_message_queue.append(data)
+                    else:
+                        exchange_order_id: str = data['offerId']
+                        tracked_order: BitbayInFlightOrder = self._in_flight_orders_by_exchange_id.get(exchange_order_id)
 
-                    if tracked_order is None:
-                        self.logger().warning(f"Unrecognized order ID from user stream: {client_order_id}.")
-                        self.logger().warning(f"Event: {event_message}")
-                        continue
+                        if tracked_order is None:
+                            self.logger().warning(f"Unrecognized order ID from user stream: {tracked_order.client_order_id}.")
+                            self.logger().warning(f"Event: {event_message}")
+                            try_update_again = True
 
-                    # update the tracked order
-                    self._update_inflight_order(tracked_order, data)
+                        # update the tracked order
+                        self._update_inflight_order(tracked_order, data)
                 elif topic == 'sub':
                     pass
                 elif topic == 'unsub':
                     pass
                 else:
                     self.logger().debug(f"Unrecognized user stream event topic: {topic}.")
-
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -642,63 +667,72 @@ cdef class BitbayExchange(ExchangeBase):
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                self.logger().warning("Failed to fetch updates on New Connector. Check network connection.")
+                self.logger().warning("Failed to fetch updates on Bitbay. Check network connection.")
                 self.logger().info(e)
 
     async def _update_balances(self):
         headers = self.generate_request_headers()
         balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE,
-                                                   params=headers)
+                                                   headers=headers)
         await self._set_balances(balances_response["balances"])
 
     async def _update_trading_rules(self):
         exchange_info = await self.api_request("GET", EXCHANGE_INFO_ROUTE)
-
-        for market_name in exchanges_info["items"]:
-            market = exchange_info["items"][market_name]
+        for market_name in exchange_info["items"].keys():
+            market = exchange_info["items"][market_name]['market']
             try:
                 self._trading_rules[market_name] = TradingRule(
                     trading_pair=market_name,
-                    min_order_size = Decimal(market["first"]["minOffer"]),
-                    min_price_increment=Decimal(f"1e-{market["second"]["minOffer"]}"),
-                    min_base_amount_increment=Decimal(f"1e-{market["first"]['scale']}"),
-                    min_quote_amount_increment=Decimal(f"1e-{market["second"]['scale']}"),
-                    min_notional_size = Decimal(market["first"]["minOffer"])*Decimal(market["second"]["minOffer"]),
+                    min_order_size = Decimal(market['first']['minOffer']),
+                    min_price_increment=Decimal(f"1e-{market['second']['scale']}"),
+                    min_base_amount_increment=Decimal(f"1e-{market['first']['scale']}"),
+                    min_quote_amount_increment=Decimal(f"1e-{market['second']['scale']}"),
+                    min_notional_size = Decimal(market['first']['minOffer'])*Decimal(market['second']['minOffer']),
                     supports_limit_orders = True,
-                    suppeorts_market_orders = True
+                    supports_market_orders = True
                 )
             except Exception as e:
-                self.logger().debug("Error updating trading rules")
-                self.logger().debug(str(e))
+                self.logger().warning("Error updating trading rules")
+                self.logger().warning(str(e))
 
     async def _update_order_status(self):
+        if self._awaiting_response == 0:
+            while len(self._user_stream_message_queue) > 0:
+                data = self._user_stream_message_queue.pop()
+                exchange_order_id: str = data['offerId']
+                tracked_order: BitbayInFlightOrder = self._in_flight_orders_by_exchange_id.get(exchange_order_id)
+
+                if tracked_order is None:
+                    self.logger().warning(f"{self._in_flight_orders_by_exchange_id}")
+                    self.logger().warning(f"Unrecognized order ID from user stream: {exchange_order_id}.")
+                    self.logger().warning(f"Event: {data}")
+                    continue
+
+                self._update_inflight_order(tracked_order, data)
+
         tracked_orders = self._in_flight_orders.copy()
 
         try:
-            params = self.generate_request_headers()
+            headers = self.generate_request_headers()
             bitbay_order_request = await self.api_request("GET",
-                                                            GET_ORDER_ROUTE,
-                                                            params=params)
+                                                            GET_ORDERS_ROUTE,
+                                                            headers=headers)
             items = bitbay_order_request["items"]
+        except:
+            self.logger().warning("Unable to update orders")
+            return
         for item in items:
             exchange_id = item["id"]
             if exchange_id in self._in_flight_orders_by_exchange_id:
                 tracked_order = self._in_flight_orders_by_exchange_id[exchange_id]
-                tracked_orders.remove(tracked_order)
-            else:
-                if tracked_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
-                    # this order should have a bitbay_order_id at this point. If it doesn't, we should cancel it
-                    # as we won't be able to poll for updates
-                    try:
-                        await self.cancel_order(client_order_id)
-                    except Exception:
-                        pass
-                continue
-            try:
-                self._update_inflight_order(tracked_order, item)
-            except Exception as e:
-                self.logger().error(f"Failed to update New Connector order {tracked_order.exchange_order_id}")
-                self.logger().error(e)
+                # No endpoint to get a specific order. We check all orders and remove from our
+                # starting (copied) dict as we move through the response.
+                try:
+                    self._update_inflight_order(tracked_order, item)
+                    del tracked_orders[tracked_order.client_order_id]
+                except Exception as e:
+                    self.logger().error(f"Failed to update Bitbay order {tracked_order.exchange_order_id}")
+                    self.logger().error(e)
         #Go through the orders that were not included in the response from ORDERS_ENDPOINT    
         for client_order_id, tracked_order in tracked_orders.iteritems():
             bitbay_order_id = tracked_order.exchange_order_id
@@ -708,7 +742,9 @@ cdef class BitbayExchange(ExchangeBase):
                     self.logger().warning(f"marking {client_order_id} as cancelled")
                     cancellation_event = OrderCancelledEvent(now(), client_order_id)
                     self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
-                    self.stop_tracking(client_order_id)
+                    self.c_stop_tracking_order(client_order_id)
+            else:
+                self._in_flight_orders_by_exchange_id[bitbay_order_id] = tracked_order
 
     # ==========================================================
     # Miscellaneous
@@ -740,7 +776,6 @@ cdef class BitbayExchange(ExchangeBase):
             int64_t last_tick = <int64_t> (self._last_timestamp / self._poll_interval)
             int64_t current_tick = <int64_t> (timestamp / self._poll_interval)
 
-        self._tx_tracker.c_tick(timestamp)
         ExchangeBase.c_tick(self, timestamp)
         if current_tick > last_tick:
             if not self._poll_notifier.is_set():
@@ -770,11 +805,6 @@ cdef class BitbayExchange(ExchangeBase):
         if self._shared_client is None:
             self._shared_client = aiohttp.ClientSession()
 
-        if data is not None and http_method == "POST":
-            data = json.dumps(data).encode('utf8')
-            headers = {"Content-Type": "application/json"}
-
-        headers.update(self._bitbay_auth.generate_auth_dict())
         full_url = f"{self.API_REST_ENDPOINT}{url}"
 
         # Sign requests for secure requests
@@ -783,7 +813,7 @@ cdef class BitbayExchange(ExchangeBase):
                                                timeout=API_CALL_TIMEOUT,
                                                data=data, params=params, headers=headers) as response:
             if response.status != 200:
-                self.logger().info(f"Issue with New Connector API {http_method} to {url}, response: ")
+                self.logger().info(f"Issue with Bitbay API {http_method} to {url}, response: ")
                 self.logger().info(await response.text())
                 raise IOError(f"Error fetching data from {full_url}. HTTP status is {response.status}.")
             data = await response.json()

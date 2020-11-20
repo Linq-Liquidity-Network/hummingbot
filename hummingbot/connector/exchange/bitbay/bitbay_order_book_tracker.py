@@ -36,7 +36,6 @@ class BitbayOrderBookTracker(OrderBookTracker):
         trading_pairs: Optional[List[str]] = None,
         rest_api_url: str = "https://api.bitbay.net.io",
         websocket_url: str = "wss://ws.bitbay.net.io/v2/ws",
-        bitbay_auth: str = ""
     ):
         super().__init__(
             BitbayAPIOrderBookDataSource(

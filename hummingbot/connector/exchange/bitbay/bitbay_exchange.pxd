@@ -13,6 +13,7 @@ cdef class BitbayExchange(ExchangeBase):
         object _bitbay_auth
         int _bitbay_accountid
         int _bitbay_exchangeid
+        int _awaiting_response
         str _bitbay_private_key
         object _order_sign_param
 
@@ -32,4 +33,5 @@ cdef class BitbayExchange(ExchangeBase):
         object _order_id_lock
         dict _bitbay_tokenids
         list _trading_pairs
+        list _user_stream_message_queue
         object _bitbay_order_sign_param

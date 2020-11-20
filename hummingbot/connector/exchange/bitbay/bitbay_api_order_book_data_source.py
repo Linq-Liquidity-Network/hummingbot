@@ -177,11 +177,11 @@ class BitbayAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     async for raw_msg in self._inner_messages(ws):
                         if len(raw_msg) > 4:
                             msg = ujson.loads(raw_msg)
-                            topic = (msg["topic"]).split('/')
-                            trading_pair = topic[2].upper()
-                            msg["trading_pair"] = trading_pair
                             if "action" in msg:
                                 if msg["action"] == "push":
+                                    topic = (msg["topic"]).split('/')
+                                    trading_pair = topic[2].upper()
+                                    msg["trading_pair"] = trading_pair
                                     for datum in msg["message"]["transactions"]:
                                         trade_msg: OrderBookMessage = BitbayOrderBook.trade_message_from_exchange(datum, msg)
                                         output.put_nowait(trade_msg)
