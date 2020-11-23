@@ -290,7 +290,7 @@ cdef class BitbayExchange(ExchangeBase):
                 # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status 
                 # updates mark this as cancelled if it doesn't actually exist.
-                self.logger().warning("Timed OUT!")
+                pass
 
             # Verify the response from the exchange
             if "status" not in creation_response.keys():
@@ -441,6 +441,7 @@ cdef class BitbayExchange(ExchangeBase):
                 if not await self.cancel_order(order_id):
                     # this order did not exist on the exchange
                     cancel_verifier.cancel_one()
+                    self.c_stop_tracking_order(order_id)
             except Exception:
                 cancel_verifier.cancel_one()
         
@@ -687,7 +688,7 @@ cdef class BitbayExchange(ExchangeBase):
                     min_price_increment=Decimal(f"1e-{market['second']['scale']}"),
                     min_base_amount_increment=Decimal(f"1e-{market['first']['scale']}"),
                     min_quote_amount_increment=Decimal(f"1e-{market['second']['scale']}"),
-                    min_notional_size = Decimal(market['first']['minOffer'])*Decimal(market['second']['minOffer']),
+                    min_notional_size = Decimal(market['second']['minOffer']),
                     supports_limit_orders = True,
                     supports_market_orders = True
                 )
