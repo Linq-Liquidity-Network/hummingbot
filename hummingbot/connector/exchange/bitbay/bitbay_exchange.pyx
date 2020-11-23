@@ -83,6 +83,7 @@ GET_ORDERS_ROUTE = "/trading/offer"
 MAINNET_API_REST_ENDPOINT = "https://api.bitbay.net/rest"
 MAINNET_WS_ENDPOINT = "wss://api.bitbay.net/websocket"
 EXCHANGE_INFO_ROUTE = "/trading/ticker"
+EXCHANGE_STATS = "/trading/stats/:trading_pair"
 BALANCES_INFO_ROUTE = "/balances/BITBAY/balance"
 ORDER_ROUTE = "/trading/offer/:trading_pair"
 ORDER_CANCEL_ROUTE = "/trading/offer/:trading_pair/:id/:type/:price"
@@ -485,7 +486,7 @@ cdef class BitbayExchange(ExchangeBase):
 
     async def check_network(self) -> NetworkStatus:
         try:
-            await self.api_request("GET", EXCHANGE_INFO_ROUTE)
+            await self.api_request("GET", f"{EXCHANGE_STATS}".replace("trading_pair", "BTC-PLN"))
         except asyncio.CancelledError:
             raise
         except Exception:
