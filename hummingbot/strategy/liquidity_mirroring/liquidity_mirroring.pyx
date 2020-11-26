@@ -758,6 +758,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
     cdef c_process_market_pair(self, object market_pair):
         # prepare our new desired book
+        # TODO: pass in our min_primary_amount to keep orders below that size off the list
         new_desired_book = BookState(
             bids=list(market_pair.order_book_bid_entries()), 
             asks=list(market_pair.order_book_ask_entries())
@@ -768,7 +769,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         new_desired_book.crop(len(self.bid_amounts), len(self.ask_amounts))
         #new_desired_book.scale_amounts(self.mirroring_amount_scale) #add this if we want to scale back the size of our mirrored orders vs the source order
         new_desired_book.markup(self.order_price_markup, self.order_price_markup)
-        new_desired_book.limit_by_ratios(self.bid_amounts, self.ask_amounts)
+        new_desired_book.limit_by_ratios(self.bid_amount_percents, self.ask_amount_percents)
         #new_desired_book.markup_fees(flat_fee, scale_fee)
         self.desired_book = new_desired_book
 
@@ -789,200 +790,51 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         if (self.two_sided_mirroring):
             self.adjust_mirrored_orderbook(market_pair, best_bid, best_ask)
 
+    def _get_available_balances(self):
+        # TODO Should return the availabale balance that we have for use in placing new primary market orders
+        # this includes all calculations related to ensuring that we have enough balance on the offsetting exchange
+        # to cover any fills that we might recieve
 
-    def adjust_primary_orderbook(self, primary_market_pair, best_bid, best_ask, bids, asks):
-        primary_market: MarketBase = primary_market_pair.market
-        mirrored_market: MarketBase = self.mirrored_market_pairs[0].market
-        mirrored_market_pair = self.mirrored_market_pairs[0]
-        available_quote_exposure = self.max_exposure_quote - self.offset_quote_exposure
-        available_base_exposure = self.max_exposure_base - self.offset_base_exposure
+        return available_base, available_quote
 
-        available_offset_base = self.mirrored_base_balance
-        available_offset_quote = self.mirrored_quote_balance
+    def _place_primary_order(self, order):
+        quant_price = primary_market.c_quantize_order_price(primary_market_pair.trading_pair, order.price)
+        quant_amount = primary_market.c_quantize_order_amount(primary_market_pair.trading_pair, order.amount)
+        place_order = self.c_buy_with_specific_market if order.side is TradeType.BUY else self.c_sell_with_specific_market
 
-        available_quote_exposure = min(available_quote_exposure, available_offset_base * best_ask.price)
-        available_base_exposure = min(available_base_exposure, available_offset_quote/best_bid.price)
+        try:
+            order_id = place_order(primary_market_pair, quant_amount, OrderType.LIMIT, quant_price)
+            self.current_book.add(order)
+            return True
+        except:
+            return False
 
-        for j in range(0,len(self.bid_amount_percents)):
-            self.bid_amounts[j] = (self.bid_amount_percents[j] * (available_quote_exposure/best_bid.price))
-        
-        for j in range(0,len(self.ask_amount_percents)):
-            self.ask_amounts[j] = (self.ask_amount_percents[j] * available_base_exposure)
+    def _place_primary_orders(self, orders, available_amount):
+        for order in orders:
+            if order.amount <= available_amount:
+                if self._place_primary_order(order):
+                    available_amount -= order.amount
+                    order.mark_sent()
 
-        bid_amount = Decimal(min(best_bid.amount, self.bid_amounts[0]))
-        if (bid_amount > 0):
-            primary_fees_bid, bid_fee_object = self.factor_in_fees(primary_market, primary_market_pair, best_bid.price, bid_amount, True, True)
-            both_fees_bid, fee_object_unused = self.factor_in_fees(mirrored_market, mirrored_market_pair, primary_fees_bid, bid_amount, False, False)
-            adjusted_bid = both_fees_bid * (1 - self.order_price_markup)
-        else:
-            adjusted_bid = best_bid.price * (1 - self.order_price_markup)
+    # TODO with these changes, we should have a process that cancells all primary orders if we have network problems getting the updated
+    # orderbook from the mirrored exchange
+    def adjust_primary_orderbook(self): # TODO make async and take a lock like adjust_mirrored_orderbook
+        primary_market_pair = # TOOD
+        available_base, available_quote = self._get_available_balances()
+        bids_to_place, asks_to_place, orders_to_cancel = self.current_book.steps_to(self.desired_book)
 
-        ask_amount = Decimal(min(best_ask.amount, self.ask_amounts[0]))
-        if (ask_amount > 0):
-            primary_fees_ask, ask_fee_object = self.factor_in_fees(primary_market, primary_market_pair, best_ask.price, ask_amount, False, True)
-            both_fees_ask, fee_object_unused = self.factor_in_fees(mirrored_market, mirrored_market_pair, primary_fees_ask, ask_amount, True, False)
-            adjusted_ask = both_fees_ask * (1 + self.order_price_markup)
-        else:
-            adjusted_ask = best_ask.price * (1 + self.order_price_markup)
+        # Cancel any orders that we no longer want
+        for order in to_cancel:
+            if order.is_live_uncancelled():
+                try:
+                    self.c_cancel_order(primary_market_pair, order.order_id)
+                    order.mark_canceled()
+                except:
+                    pass
 
-        no_more_bids = (self.pm.amount_to_offset > self.max_offsetting_exposure)
-
-        if ((len(self.bid_replace_ranks) > 0) or (self.cycle_number == 0) or (no_more_bids)):
-            self.primary_best_bid = adjusted_bid 
-            bid_inc = self.primary_best_bid * self.order_price_markup
-            for order_id in self.marked_for_deletion.keys():
-                order = self.marked_for_deletion[order_id]
-                if (order["is_buy"] == True):
-                    if "time" in order:
-                        current_time = datetime.timestamp(datetime.now())
-                        if (order["time"] < current_time) or (order["rank"] in self.bid_replace_ranks) or no_more_bids:
-                            try:
-                                self.c_cancel_order(primary_market_pair,order_id)
-                            except:
-                                break
-
-            self.bid_replace_ranks.clear()
-            if not no_more_bids:
-                if 0 in self.buys_to_replace:
-                    amount = Decimal(min(best_bid.amount, (self.bid_amounts[0])))
-                    if (amount >= Decimal(self.min_primary_amount)):                                                     
-                        self.buys_to_replace.remove(0)
-                        quant_price = primary_market.c_quantize_order_price(primary_market_pair.trading_pair, adjusted_bid)
-                        quant_amount = primary_market.c_quantize_order_amount(primary_market_pair.trading_pair, amount)
-
-                        try:
-                            if (min(primary_market.get_available_balance(primary_market_pair.quote_asset),self.primary_quote_balance) >
-                              quant_price * quant_amount) and (self.check_flat_fee_coverage(primary_market, bid_fee_object.flat_fees)):
-                                order_id = self.c_buy_with_specific_market(primary_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                                self.marked_for_deletion[order_id] = {"is_buy": True,
-                                                                      "rank": 0}
-                            else:
-                                self.logger().warning(f"INSUFFICIENT FUNDS for buy on {primary_market.name}")
-                                if not self.funds_message_sent:
-                                    self.slack_insufficient_funds_message(primary_market.name, primary_market_pair.quote_asset)
-                                    self.funds_message_sent = True
-                                self.buys_to_replace.append(0)
-                        except:
-                            self.buys_to_replace.append(0)
-                            pass
-
-                price = self.primary_best_bid
-                for i in range(0,len(self.bid_amounts) - 1):
-                    price -= bid_inc
-                    if (i+1) in self.buys_to_replace:
-                        if len(bids) > (i + 1):
-                            bid_price = bids[i+1]["price"]
-                            bid_amount = bids[i+1]["amount"]
-                        else:
-                            bid_price = price
-                            bid_amount = Decimal("inf")
-
-                        amount = Decimal(min(bid_amount, (self.bid_amounts[i+1])))
-                        if (amount >= Decimal(self.min_primary_amount)):
-                            self.buys_to_replace.remove(i+1)
-                            price_tx, fee_object = self.factor_in_fees(primary_market, primary_market_pair, bid_price, amount, True, True)
-                            min_price, fee_object_unused = self.factor_in_fees(mirrored_market, mirrored_market_pair, price_tx, amount, False, False)
-                        
-                            min_price = min(min_price * (1 - self.order_price_markup), bid_price)
-
-                            quant_price = primary_market.c_quantize_order_price(primary_market_pair.trading_pair, min_price)
-                            quant_amount = primary_market.c_quantize_order_amount(primary_market_pair.trading_pair, amount)
-
-                            try:
-                                if (min(primary_market.get_available_balance(primary_market_pair.quote_asset),self.primary_quote_balance) >
-                                  quant_price * quant_amount) and (self.check_flat_fee_coverage(primary_market, fee_object.flat_fees)):
-                                      order_id = self.c_buy_with_specific_market(primary_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                                      self.marked_for_deletion[order_id] = {"is_buy": True,
-                                                                            "rank": (i+1)}
-                                else:
-                                    self.logger().warning(f"INSUFFICIENT FUNDS for buy on {primary_market.name}")
-                                    if not self.funds_message_sent:
-                                        self.slack_insufficient_funds_message(primary_market.name, primary_market_pair.quote_asset)
-                                        self.funds_message_sent = True
-                                    self.buys_to_replace.append(i+1)
-                            except:
-                                self.buys_to_replace.append(i+1)
-                                break
-
-        no_more_asks = self.pm.amount_to_offset < (-1) * (self.max_offsetting_exposure)
-
-        if (len(self.ask_replace_ranks) > 0) or (self.cycle_number == 5) or no_more_asks:
-            self.primary_best_ask = adjusted_ask
-            ask_inc = self.primary_best_ask * self.order_price_markup
-            for order_id in self.marked_for_deletion.keys():
-                order = self.marked_for_deletion[order_id]
-                if (order["is_buy"] == False):
-                    if "time" in order:
-                        current_time = datetime.timestamp(datetime.now())
-                        if (order["time"] < current_time) or (order["rank"] in self.ask_replace_ranks) or no_more_asks:
-                            try:
-                                self.c_cancel_order(primary_market_pair,order_id)
-                            except:                            
-                                break
-
-            self.ask_replace_ranks.clear()
-
-            if not no_more_asks:
-                if 0 in self.sells_to_replace:
-                    amount = Decimal(min(best_ask.amount, self.ask_amounts[0]))
-                    if (amount >= Decimal(self.min_primary_amount)):
-                        self.sells_to_replace.remove(0)
-                        quant_price = primary_market.c_quantize_order_price(primary_market_pair.trading_pair, adjusted_ask)
-                        quant_amount = primary_market.c_quantize_order_amount(primary_market_pair.trading_pair, amount)
-
-                        try:
-                            if (min(primary_market.get_available_balance(primary_market_pair.base_asset),self.primary_base_balance) >
-                              quant_amount) and (self.check_flat_fee_coverage(primary_market, ask_fee_object.flat_fees)):
-                                  order_id = self.c_sell_with_specific_market(primary_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                                  self.marked_for_deletion[order_id] = {"is_buy": False,
-                                                                        "rank": 0}
-                            else:
-                                self.logger().warning(f"INSUFFICIENT FUNDS for sell on {primary_market.name}")
-                                if not self.funds_message_sent:
-                                    self.slack_insufficient_funds_message(primary_market.name, primary_market_pair.base_asset)
-                                    self.funds_message_sent = True
-                                self.sells_to_replace.append(0)
-                        except:
-                            self.sells_to_replace.append(0)
-                            pass
-    
-                price = self.primary_best_ask
-                for i in range(0,len(self.ask_amounts) - 1):
-                    price += ask_inc
-                    if (i+1) in self.sells_to_replace:
-                        if len(asks) > (i + 1):
-                            ask_price = asks[i+1]["price"]
-                            ask_amount = asks[i+1]["amount"]
-                        else:
-                            ask_price = price
-                            ask_amount = Decimal("inf")
-
-                        amount = Decimal(min(ask_amount, self.ask_amounts[i+1]))
-                        if (amount >= Decimal(self.min_primary_amount)):
-                            self.sells_to_replace.remove(i+1)
-                            price_tx, fee_object = self.factor_in_fees(primary_market, primary_market_pair, ask_price, amount, False, True)
-                            max_price, fee_object_unused = self.factor_in_fees(mirrored_market, mirrored_market_pair, price_tx, amount, True, False)
-                        
-                            max_price = max(max_price * (1 + self.order_price_markup), ask_price)
-
-                            quant_price = primary_market.c_quantize_order_price(primary_market_pair.trading_pair, max_price)
-                            quant_amount = primary_market.c_quantize_order_amount(primary_market_pair.trading_pair, amount)
-
-                            try:
-                                if (min(primary_market.get_available_balance(primary_market_pair.base_asset),self.primary_base_balance) >
-                                  quant_amount) and (self.check_flat_fee_coverage(primary_market, fee_object.flat_fees)):
-                                    order_id = self.c_sell_with_specific_market(primary_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                                    self.marked_for_deletion[order_id] = {"is_buy": False,
-                                                                          "rank": (i+1)}
-                                else:
-                                    self.logger().warning(f"INSUFFICIENT FUNDs for sell on {primary_market.name}!")
-                                    if not self.funds_message_sent:
-                                        self.slack_insufficient_funds_message(primary_market.name, primary_market_pair.base_asset)
-                                        self.funds_message_sent = True
-                                    self.sells_to_replace.append(i+1)
-                            except:
-                                self.sells_to_replace.append(i+1)
-                                break
+        # Place any new orders that we have the available balances to handle
+        self._place_primary_orders(bids_to_place, available_quote)
+        self._place_primary_orders(asks_to_place, available_base)
 
     def adjust_mirrored_orderbook(self,mirrored_market_pair,best_bid,best_ask):
         if not self.offset_beyond_threshold_message_sent:
