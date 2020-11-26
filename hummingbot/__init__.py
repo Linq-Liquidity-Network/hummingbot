@@ -27,6 +27,7 @@ logging.setLoggerClass(StructLogger)
 
 _shared_executor = None
 _data_path = None
+_cert_path = None
 
 
 def root_path() -> str:
@@ -77,6 +78,26 @@ def set_data_path(path: str):
     _data_path = path
 
 
+def cert_path() -> str:
+    global _cert_path
+    if _cert_path is None:
+        from os.path import (
+            realpath,
+            join
+        )
+        _cert_path = realpath(join(prefix_path(), "certs"))
+
+    import os
+    if not os.path.exists(_cert_path):
+        os.makedirs(_cert_path)
+    return _cert_path
+
+
+def set_cert_path(path: str):
+    global _cert_path
+    _cert_path = path
+
+
 _independent_package: Optional[bool] = None
 
 
@@ -89,16 +110,7 @@ def is_independent_package() -> bool:
 
 
 def check_dev_mode():
-    try:
-        if is_independent_package():
-            return False
-        if not path.isdir(".git"):
-            return False
-        current_branch = subprocess.check_output(["git", "symbolic-ref", "--short", "HEAD"]).decode("utf8").rstrip()
-        if current_branch != "master":
-            return True
-    except Exception:
-        return False
+    return False
 
 
 def chdir_to_data_directory():
@@ -111,6 +123,8 @@ def chdir_to_data_directory():
     app_data_dir: str = appdirs.user_data_dir("Hummingbot", "hummingbot.io")
     os.makedirs(os.path.join(app_data_dir, "logs"), 0o711, exist_ok=True)
     os.makedirs(os.path.join(app_data_dir, "conf"), 0o711, exist_ok=True)
+    os.makedirs(os.path.join(app_data_dir, "scripts"), 0o711, exist_ok=True)
+    os.makedirs(os.path.join(app_data_dir, "certs"), 0o711, exist_ok=True)
     os.chdir(app_data_dir)
     set_prefix_path(app_data_dir)
 
@@ -119,8 +133,10 @@ def add_remote_logger_handler(loggers):
     from hummingbot.logger.reporting_proxy_handler import ReportingProxyHandler
     root_logger = logging.getLogger()
     try:
+        from hummingbot.client.config.global_config_map import global_config_map
+        log_server_url = global_config_map.get("log_server_url", "https://api.coinalpha.com/reporting-proxy")
         remote_logger = ReportingProxyHandler(level="ERROR",
-                                              proxy_url="https://api.coinalpha.com/reporting-proxy",
+                                              proxy_url=log_server_url,
                                               capacity=5)
         root_logger.addHandler(remote_logger)
         for logger_name in loggers:

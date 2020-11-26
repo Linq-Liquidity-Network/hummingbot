@@ -3,28 +3,16 @@ from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.client.config.global_config_map import global_config_map
 from hummingbot.user.user_balances import UserBalances
 from hummingbot.client.config.config_helpers import save_to_yml
-from hummingbot.client.settings import GLOBAL_CONFIG_PATH
+import hummingbot.client.settings as settings
 from hummingbot.market.celo.celo_cli import CeloCLI
+from hummingbot.connector.connector_status import get_connector_status
 import pandas as pd
 from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from hummingbot.client.hummingbot_application import HummingbotApplication
 
-OPTIONS = {
-    "binance",
-    "coinbase_pro",
-    "huobi",
-    "liquid",
-    "bittrex",
-    "kucoin",
-    "kraken",
-    "ethereum",
-    "blocktane",
-    "celo",
-    "loopring",
-    "novadax",
-    "ftx"
-}
+OPTIONS = {cs.name for cs in settings.CONNECTOR_SETTINGS.values()
+           if not cs.use_ethereum_wallet}.union({"ethereum", "celo"})
 
 
 class ConnectCommand:
@@ -46,7 +34,8 @@ class ConnectCommand:
         self.app.hide_input = True
         if exchange == "kraken":
             self._notify("Reminder: Please ensure your Kraken API Key Nonce Window is at least 10.")
-        exchange_configs = [c for c in global_config_map.values() if exchange in c.key and c.is_connect_key]
+        exchange_configs = [c for c in global_config_map.values()
+                            if c.key in settings.CONNECTOR_SETTINGS[exchange].config_keys and c.is_connect_key]
         to_connect = True
         if Security.encrypted_file_exists(exchange_configs[0].key):
             await Security.wait_til_decryption_done()
@@ -66,8 +55,8 @@ class ConnectCommand:
                     self.app.to_stop_config = False
                     return
                 Security.update_secure_config(config.key, config.value)
-            api_keys = (await Security.api_keys(exchange)).values()
-            err_msg = await UserBalances.instance().add_exchange(exchange, *api_keys)
+            api_keys = await Security.api_keys(exchange)
+            err_msg = await UserBalances.instance().add_exchange(exchange, **api_keys)
             if err_msg is None:
                 self._notify(f"\nYou are now connected to {exchange}.")
             else:
@@ -81,21 +70,22 @@ class ConnectCommand:
         self._notify("\nTesting connections, please wait...")
         await Security.wait_til_decryption_done()
         df, failed_msgs = await self.connection_df()
-        lines = ["    " + l for l in df.to_string(index=False).split("\n")]
+        lines = ["    " + line for line in df.to_string(index=False).split("\n")]
         if failed_msgs:
             lines.append("\nFailed connections:")
-            lines.extend([f"    " + k + ": " + v for k, v in failed_msgs.items()])
+            lines.extend(["    " + k + ": " + v for k, v in failed_msgs.items()])
         self._notify("\n".join(lines))
 
     async def connection_df(self  # type: HummingbotApplication
                             ):
-        columns = ["Exchange", "  Keys Added", "  Keys Confirmed"]
+        columns = ["Exchange", "  Keys Added", "  Keys Confirmed", "  Connector Status"]
         data = []
         failed_msgs = {}
         err_msgs = await UserBalances.instance().update_exchanges(reconnect=True)
         for option in sorted(OPTIONS):
             keys_added = "No"
             keys_confirmed = 'No'
+            status = get_connector_status(option)
             if option == "ethereum":
                 eth_address = global_config_map["ethereum_wallet"].value
                 if eth_address is not None and eth_address in Security.private_keys():
@@ -123,7 +113,7 @@ class ConnectCommand:
                         failed_msgs[option] = err_msg
                     else:
                         keys_confirmed = 'Yes'
-            data.append([option, keys_added, keys_confirmed])
+            data.append([option, keys_added, keys_confirmed, status])
         return pd.DataFrame(data=data, columns=columns), failed_msgs
 
     async def connect_ethereum(self,  # type: HummingbotApplication
@@ -144,11 +134,14 @@ class ConnectCommand:
             private_key = await self.app.prompt(prompt="Enter your wallet private key >>> ", is_password=True)
             public_address = Security.add_private_key(private_key)
             global_config_map["ethereum_wallet"].value = public_address
-            await self.prompt_a_config(global_config_map["ethereum_rpc_url"])
+            if global_config_map["ethereum_rpc_url"].value is None:
+                await self.prompt_a_config(global_config_map["ethereum_rpc_url"])
+            if global_config_map["ethereum_rpc_ws_url"].value is None:
+                await self.prompt_a_config(global_config_map["ethereum_rpc_ws_url"])
             if self.app.to_stop_config:
                 self.app.to_stop_config = False
                 return
-            save_to_yml(GLOBAL_CONFIG_PATH, global_config_map)
+            save_to_yml(settings.GLOBAL_CONFIG_PATH, global_config_map)
             err_msg = UserBalances.validate_ethereum_wallet()
             if err_msg is None:
                 self._notify(f"Wallet {public_address} connected to hummingbot.")
@@ -172,13 +165,13 @@ class ConnectCommand:
         if to_connect:
             await self.prompt_a_config(global_config_map["celo_address"])
             await self.prompt_a_config(global_config_map["celo_password"])
-            save_to_yml(GLOBAL_CONFIG_PATH, global_config_map)
+            save_to_yml(settings.GLOBAL_CONFIG_PATH, global_config_map)
 
             err_msg = await self.validate_n_connect_celo(True,
                                                          global_config_map["celo_address"].value,
                                                          global_config_map["celo_password"].value)
             if err_msg is None:
-                self._notify(f"You are now connected to Celo network.")
+                self._notify("You are now connected to Celo network.")
             else:
                 self._notify(err_msg)
         self.placeholder_mode = False

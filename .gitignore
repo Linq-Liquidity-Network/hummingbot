@@ -55,6 +55,7 @@ debug.log
 /*.egg-info
 *.whl
 
+
 # VSCode
 .vscode/
 .history/
@@ -64,3 +65,7 @@ debug.log
 
 # Helm secrets decoded files
 *.dec
+# Gateway API files
+/certs
+*.pem
+gateway.env

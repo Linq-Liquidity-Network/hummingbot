@@ -12,6 +12,10 @@ from .balance_command import BalanceCommand
 from .create_command import CreateCommand
 from .import_command import ImportCommand
 from .export_command import ExportCommand
+from .silly_commands import SillyCommands
+from .order_book_command import OrderBookCommand
+from .ticker_command import TickerCommand
+from .generate_certs_command import GenerateCertsCommand
 from .manual_trade_command import ManualTradeCommand
 from .offset_command import OffsetCommand
 from .depth_command import DepthCommand
@@ -34,6 +38,10 @@ __all__ = [
     CreateCommand,
     ImportCommand,
     ExportCommand,
+    SillyCommands,
+    OrderBookCommand,
+    TickerCommand,
+    GenerateCertsCommand,
     ManualTradeCommand,
     OffsetCommand,
     DepthCommand,

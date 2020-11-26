@@ -33,6 +33,10 @@ spec:
           name: conf-{{ $strategy.subfolder }}-vol
         - mountPath: /home/hummingbot/logs
           name: log-{{ $strategy.subfolder }}-vol 
+        lifecycle: 
+          preStop:
+            exec: 
+              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5;"]
       {{ end -}}
       volumes:
       {{ range $i, $strategy := .Values.strategies -}}   

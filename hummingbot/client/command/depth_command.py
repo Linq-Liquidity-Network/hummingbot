@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from decimal import Decimal
 
-from hummingbot.market.market_base import MarketBase
+from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.strategy_base import StrategyBase
 from hummingbot.core.event.events import OrderType
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class DepthCommand:
     def depth(self, exchange: str, levels: int):
         trading_tuples = self.market_trading_pair_tuples
-        market: MarketBase = self.markets[exchange[0]]
+        market: ExchangeBase = self.markets[exchange[0]]
         relevant_tuples = []
 
         for trading_tuple in trading_tuples:

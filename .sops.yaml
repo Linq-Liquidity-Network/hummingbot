@@ -1,2 +1,7 @@
 creation_rules:
-  - kms: 'arn:aws:kms:ca-central-1:518166041255:key/dfdb4689-a299-43ac-a71a-93e6d43a9006'
+  #dev
+  - path_regex: \.dev\.yaml
+    kms: 'arn:aws:kms:ca-central-1:518166041255:key/dfdb4689-a299-43ac-a71a-93e6d43a9006'
+  #prod
+  - path_regex: \.prod\.yaml
+    kms: 'arn:aws:kms:ca-central-1:518166041255:key/4b252b57-834d-43dd-bc88-3d99ca16c86d'

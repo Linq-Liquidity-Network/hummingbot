@@ -14,7 +14,7 @@ import logging
 from typing import Dict, Optional, List
 import unittest
 
-from hummingbot.market.ftx.ftx_order_book_tracker import FtxOrderBookTracker
+from hummingbot.connector.exchange.ftx.ftx_order_book_tracker import FtxOrderBookTracker
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_tracker import (
     OrderBookTrackerDataSourceType

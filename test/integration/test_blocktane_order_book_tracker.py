@@ -5,7 +5,7 @@ import sys; sys.path.insert(0, realpath(join(__file__, "../../../")))
 from hummingbot.core.event.event_logger import EventLogger
 from hummingbot.core.event.events import OrderBookEvent, OrderBookTradeEvent, TradeType
 
-from hummingbot.market.blocktane.blocktane_order_book_tracker import BlocktaneOrderBookTracker
+from hummingbot.connector.exchange.blocktane.blocktane_order_book_tracker import BlocktaneOrderBookTracker
 import asyncio
 import logging
 from typing import (

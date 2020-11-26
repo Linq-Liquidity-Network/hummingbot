@@ -4,10 +4,11 @@ from collections import (
     deque,
     OrderedDict
 )
+import inspect
 from typing import List, Dict
 from hummingbot import check_dev_mode
 from hummingbot.logger.application_warning import ApplicationWarning
-from hummingbot.market.market_base import MarketBase
+from hummingbot.connector.connector_base import ConnectorBase
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.client.config.global_config_map import global_config_map
 from hummingbot.core.utils.ethereum import check_web3
@@ -17,7 +18,7 @@ from hummingbot.client.config.config_helpers import (
 )
 from hummingbot.client.config.security import Security
 from hummingbot.user.user_balances import UserBalances
-from hummingbot.client.settings import required_exchanges, DEXES
+from hummingbot.client.settings import required_exchanges, ethereum_wallet_required, ethereum_gas_station_required
 from hummingbot.core.utils.async_utils import safe_ensure_future
 
 from typing import TYPE_CHECKING
@@ -67,18 +68,27 @@ class StatusCommand:
 
         return "\n".join(lines)
 
-    def strategy_status(self):
-        if global_config_map.get("paper_trade_enabled").value:
-            self._notify("\n  Paper Trading ON: All orders are simulated, and no real orders are placed.")
-        self._notify(self.strategy.format_status() + "\n")
-        self.application_warning()
-        return True
+    async def strategy_status(self):
+        paper_trade = "\n  Paper Trading ON: All orders are simulated, and no real orders are placed." if global_config_map.get("paper_trade_enabled").value \
+            else ""
+        app_warning = self.application_warning()
+        app_warning = "" if app_warning is None else app_warning
+        if inspect.iscoroutinefunction(self.strategy.format_status):
+            st_status = await self.strategy.format_status()
+        else:
+            st_status = self.strategy.format_status()
+        status = paper_trade + "\n" + st_status + "\n" + app_warning
+        if self._script_iterator is not None:
+            self._script_iterator.request_status()
+        return status
 
     def application_warning(self):
         # Application warnings.
         self._expire_old_application_warnings()
         if check_dev_mode() and len(self._app_warnings) > 0:
-            self._notify(self._format_application_warnings())
+            app_warning = self._format_application_warnings()
+            self._notify(app_warning)
+            return app_warning
 
     async def validate_required_connections(self) -> Dict[str, str]:
         invalid_conns = {}
@@ -91,7 +101,7 @@ class StatusCommand:
             connections = await UserBalances.instance().update_exchanges(exchanges=required_exchanges)
             invalid_conns.update({ex: err_msg for ex, err_msg in connections.items()
                                   if ex in required_exchanges and err_msg is not None})
-            if any(ex in DEXES for ex in required_exchanges):
+            if ethereum_wallet_required():
                 err_msg = UserBalances.validate_ethereum_wallet()
                 if err_msg is not None:
                     invalid_conns["ethereum"] = err_msg
@@ -103,14 +113,27 @@ class StatusCommand:
         return missing_globals + missing_configs
 
     def status(self,  # type: HummingbotApplication
-               ):
-        safe_ensure_future(self.status_check_all(), loop=self.ev_loop)
+               live: bool = False):
+        safe_ensure_future(self.status_check_all(live=live), loop=self.ev_loop)
 
     async def status_check_all(self,  # type: HummingbotApplication
-                               notify_success=True) -> bool:
+                               notify_success=True,
+                               live=False) -> bool:
 
         if self.strategy is not None:
-            return self.strategy_status()
+            if live:
+                await self.stop_live_update()
+                self.app.live_updates = True
+                while self.app.live_updates:
+                    script_status = '\n Status from script would not appear here. ' \
+                                    'Simply run the status command without "--live" to see script status.'
+                    await self.cls_display_delay(
+                        await self.strategy_status() + script_status + "\n\n Press escape key to stop update.", 1
+                    )
+                self._notify("Stopped live status display update.")
+            else:
+                self._notify(await self.strategy_status())
+            return True
 
         # Preliminary checks.
         self._notify("\nPreliminary checks:")
@@ -163,15 +186,19 @@ class StatusCommand:
             else:
                 self._notify("  - ETH wallet check: ETH wallet is not connected.")
 
-        loading_markets: List[MarketBase] = []
+        if ethereum_gas_station_required() and not global_config_map["ethgasstation_gas_enabled"].value:
+            self._notify(f'  - ETH gas station check: Manual gas price is fixed at '
+                         f'{global_config_map["manual_gas_price"].value}.')
+
+        loading_markets: List[ConnectorBase] = []
         for market in self.markets.values():
             if not market.ready:
                 loading_markets.append(market)
 
         if len(loading_markets) > 0:
-            self._notify(f"  - Exchange connectors check:  Waiting for exchange connectors " +
-                         ",".join([m.name.capitalize() for m in loading_markets]) + f" to get ready for trading. \n"
-                         f"                    Please keep the bot running and try to start again in a few minutes. \n")
+            self._notify("  - Connectors check:  Waiting for connectors " +
+                         ",".join([m.name.capitalize() for m in loading_markets]) + " to get ready for trading. \n"
+                         "                    Please keep the bot running and try to start again in a few minutes. \n")
 
             for market in loading_markets:
                 market_status_df = pd.DataFrame(data=market.status_dict.items(), columns=["description", "status"])
@@ -190,8 +217,21 @@ class StatusCommand:
                 if market.network_status is not NetworkStatus.CONNECTED
             ]
             for offline_market in offline_markets:
-                self._notify(f"  - Exchange connector check: {offline_market} is currently offline.")
+                self._notify(f"  - Connector check: {offline_market} is currently offline.")
             return False
+
+        # Paper trade mode is currently not available for connectors other than exchanges.
+        # Todo: This check is hard coded at the moment, when we get a clearer direction on how we should handle this,
+        # this section will need updating.
+        if global_config_map.get("paper_trade_enabled").value:
+            if "balancer" in required_exchanges and \
+                    str(global_config_map.get("ethereum_chain_name").value).lower() != "kovan":
+                self._notify("Error: Paper trade mode is not available on balancer at the moment.")
+                return False
+            if "binance_perpetual" in required_exchanges:
+                self._notify("Error: Paper trade mode is not available on binance_perpetual at the moment.")
+                return False
+
         self.application_warning()
-        self._notify(f"  - All checks: Confirmed.")
+        self._notify("  - All checks: Confirmed.")
         return True

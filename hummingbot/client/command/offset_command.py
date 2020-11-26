@@ -2,7 +2,6 @@ import pandas as pd
 from typing import TYPE_CHECKING
 from decimal import Decimal
 
-from hummingbot.market.market_base import MarketBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.strategy_base import StrategyBase
 from hummingbot.core.event.events import OrderType

@@ -14,11 +14,12 @@ from typing import (
 )
 from datetime import datetime, timedelta
 from hummingbot.core.utils.async_utils import safe_ensure_future
-from hummingbot.market.market_base cimport MarketBase
+from hummingbot.connector.exchange_base cimport ExchangeBase
 from hummingbot.core.event.events import (
     TradeType,
     OrderType,
 )
+from hummingbot.core.data_type.limit_order cimport LimitOrder
 from hummingbot.core.data_type.market_order import MarketOrder
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.network_iterator import NetworkStatus
@@ -26,6 +27,9 @@ from hummingbot.strategy import market_trading_pair_tuple
 from hummingbot.strategy.strategy_base import StrategyBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring_market_pair import LiquidityMirroringMarketPair
+from hummingbot.strategy.liquidity_mirroring.order_tracking.order_tracker import OrderTracker
+from hummingbot.strategy.liquidity_mirroring.order_tracking.order import Order as TrackedOrder
+from hummingbot.strategy.liquidity_mirroring.order_tracking.order_state import OrderState
 from hummingbot.strategy.liquidity_mirroring.position import PositionManager
 from hummingbot.strategy.liquidity_mirroring.book_state import BookState, Order
 
@@ -43,7 +47,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
     OPTION_LOG_INSUFFICIENT_ASSET = 1 << 5
     OPTION_LOG_ALL = 0xfffffffffffffff
     MARKET_ORDER_MAX_TRACKING_TIME = 0.4 * 10
-    FAILED_ORDER_COOL_OFF_TIME = 0.0
 
     CANCEL_EXPIRY_DURATION = 60.0
     @classmethod
@@ -63,13 +66,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
                  max_offsetting_exposure: Decimal,
                  max_loss: Decimal,
                  max_total_loss: Decimal,
-                 equivalent_tokens: list,
                  min_primary_amount: Decimal,
                  min_mirroring_amount: Decimal,
                  bid_amount_percents: list,
                  ask_amount_percents: list,
+                 order_replacement_threshold: Decimal,
+                 post_only: bool,
                  slack_hook: str,
                  slack_update_period: Decimal,
+                 fee_override: Decimal,
                  logging_options: int = OPTION_LOG_ORDER_COMPLETED,
                  status_report_interval: Decimal = 60.0,
                  next_trade_delay_interval: Decimal = 15.0,
@@ -86,15 +91,14 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         self._logging_options = logging_options
         self.primary_market_pairs = primary_market_pairs
         self.mirrored_market_pairs = mirrored_market_pairs
-        
         self._all_markets_ready = False
         self._status_report_interval = status_report_interval
         self._last_timestamp = 0
         self._next_trade_delay = next_trade_delay_interval
         self._last_trade_timestamps = {}
         self._failed_order_tolerance = failed_order_tolerance
-        self._cool_off_logged = False
         self.two_sided_mirroring = two_sided_mirroring
+        self.order_replacement_threshold = Decimal(order_replacement_threshold)
         self._failed_market_order_count = 0
         self._last_failed_market_order_timestamp = Decimal(0)
                                                                 
@@ -129,26 +133,16 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
         self.outstanding_offsets = {}
         self.max_loss = Decimal(max_loss)
-        self.equivalent_tokens = equivalent_tokens
 
         self.max_total_loss = Decimal(max_total_loss)
         self.pm = PositionManager()
+        self.offset_order_tracker = OrderTracker()
 
-        self.offset_base_exposure = Decimal(0)
-        self.offset_quote_exposure = Decimal(0)
-
-        self.primary_base_balance = Decimal(0)
-        self.primary_base_total_balance = Decimal(0)
-        self.primary_quote_balance = Decimal(0)
-        self.primary_quote_total_balance = Decimal(0)
-        self.mirrored_base_balance = Decimal(0)
-        self.mirrored_base_total_balance = Decimal(0)
-        self.mirrored_quote_balance = Decimal(0)
-        self.mirrored_quote_total_balance = Decimal(0)
         self.balances_set = False     
         self.funds_message_sent = False
         self.offset_beyond_threshold_message_sent = False
         self.fail_message_sent = False
+        self.crossed_books = False
 
         self.min_primary_amount = Decimal(min_primary_amount)
         self.min_mirroring_amount = Decimal(min_mirroring_amount)
@@ -160,7 +154,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         self.sells_to_replace = list(range(0,len(self.ask_amounts)))
         self.bid_replace_ranks = []
         self.ask_replace_ranks = []
-        self.has_been_offset = []
 
         self.previous_sells = [Decimal(0) for i in range(0, len(self.ask_amounts))]
         self.previous_buys = [Decimal(0) for i in range(0, len(self.bid_amounts))]
@@ -175,19 +168,24 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         self.slack_url = slack_hook
         self.cycle_number = 0
         self.start_time = datetime.timestamp(datetime.now())
-        self.start_wallet_check_time = self.start_time
         self.slack_update_period = slack_update_period
+
+        self.mm_order_type = OrderType.LIMIT
+        if post_only and OrderType.LIMIT_MAKER in primary_market_pairs[0].market.supported_order_types():
+            self.mm_order_type = OrderType.LIMIT_MAKER
+
+        self.fee_override = fee_override
 
         self.desired_book = BookState()
         self.current_book = BookState()
 
     @property
-    def tracked_taker_orders(self) -> List[Tuple[MarketBase, MarketOrder]]:
-        return self._sb_order_tracker.tracked_taker_orders
+    def tracked_limit_orders(self) -> List[Tuple[ExchangeBase, LimitOrder]]:
+        return self._sb_order_tracker.tracked_limit_orders
 
     @property
-    def tracked_maker_orders(self) -> List[Tuple[MarketBase, MarketOrder]]:
-        return self._sb_order_tracker.tracked_maker_orders
+    def tracked_market_orders(self) -> List[Tuple[ExchangeBase, MarketOrder]]:
+        return self._sb_order_tracker.tracked_market_orders
 
     @property
     def tracked_taker_orders_data_frame(self) -> List[pd.DataFrame]:
@@ -218,19 +216,27 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         mirrored_market_df = self.market_status_data_frame([self.mirrored_market_pairs[0]])
         mult = mirrored_market_df["Best Bid Price"]
         profit = (total_balance[0] * float(mult)) - float(self.initial_base_amount * self.best_bid_start) + total_balance[1] - float(self.initial_quote_amount)
-        portfolio = (total_balance[0] * float(mult)) - (float(self.initial_base_amount) * float(mult)) + total_balance[1] - float(self.initial_quote_amount)
+        change_in_base = Decimal(total_balance[0]) - self.initial_base_amount
+        change_in_quote = Decimal(total_balance[1]) - self.initial_quote_amount
         current_time = datetime.now().isoformat()
         lines.extend(["", f"   Time: {current_time}"])
         lines.extend(["", f"   Executed Trades: {self.trades_executed}"])
         lines.extend(["", f"   Total Trade Volume: {self.total_trading_volume}"])
         lines.extend(["", f"   Total Balance ({self.primary_market_pairs[0].base_asset}): {total_balance[0]}"])
         lines.extend(["", f"   Total Balance ({self.primary_market_pairs[0].quote_asset}): {total_balance[1]}"])
+        lines.extend(["", f"   Change in base: {change_in_base}"])
+        lines.extend(["", f"   Change in quote: {change_in_quote}"])
+        lines.extend(["", f"   Total pre-fee profit: {-self.pm.total_loss}"])
         lines.extend(["", f"   Overall Change in Holdings: {profit}"])
-        lines.extend(["", f"   Increase in Portfolio: {portfolio}"])
         lines.extend(["", f"   Amount to offset (in base currency): {self.pm.amount_to_offset}"])
         lines.extend(["", f"   Average price of position: {self.pm.avg_price}"])
-        lines.extend(["", f"   Total running loss: {self.pm.total_loss}"])
         lines.extend(["", f"   Active market making orders: {len(self.marked_for_deletion.keys())}"])
+        lines.extend(["", f"   Offsetting bids:"])
+        for order in self.offset_order_tracker.get_bids():
+            lines.extend(["", f"{order}"])
+        lines.extend(["", f"   Offsetting asks:"])
+        for order in self.offset_order_tracker.get_asks():
+            lines.extend(["", f"{order}"])
         if len(warning_lines) > 0:
             lines.extend(["", "  *** WARNINGS ***"] + warning_lines)
 
@@ -284,18 +290,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
                 primary_quote_asset = self.primary_market_pairs[0].quote_asset
                 mirrored_base_asset = self.mirrored_market_pairs[0].base_asset
                 mirrored_quote_asset = self.mirrored_market_pairs[0].quote_asset
-                while self.primary_base_balance == 0:
-                    self.primary_base_balance = primary_market.get_available_balance(primary_base_asset)
-                    self.primary_base_total_balance = primary_market.get_balance(primary_base_asset)
-                while self.primary_quote_balance == 0:
-                    self.primary_quote_balance = primary_market.get_available_balance(primary_quote_asset)
-                    self.primary_quote_total_balance = primary_market.get_balance(primary_quote_asset)
-                while self.mirrored_base_balance == 0:
-                    self.mirrored_base_balance = mirrored_market.get_available_balance(mirrored_base_asset)
-                    self.mirrored_base_total_balance = mirrored_market.get_balance(mirrored_base_asset)
-                while self.mirrored_quote_balance == 0:
-                    self.mirrored_quote_balance = mirrored_market.get_available_balance(mirrored_quote_asset)
-                    self.mirrored_quote_total_balance = mirrored_market.get_balance(mirrored_quote_asset)
+                while primary_market.get_balance(primary_base_asset) == 0:
+                    pass
+                while primary_market.get_balance(primary_quote_asset) == 0:
+                    pass 
+                while mirrored_market.get_balance(mirrored_base_asset) == 0:
+                    pass
+                while mirrored_market.get_available_balance(mirrored_quote_asset) == 0:
+                    pass
+
                 assets_df = self.wallet_balance_data_frame([self.mirrored_market_pairs[0]])
                 total_balance = assets_df['Total Balance']
                 assets_df = self.wallet_balance_data_frame([self.primary_market_pairs[0]])
@@ -319,211 +322,101 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         finally:
             self._last_timestamp = timestamp
 
-    def cancel_offsetting_orders(self):
-        mirrored_market_pair: MarketTradingPairTuple = self.mirrored_market_pairs[0]
-        active_orders = self._sb_order_tracker.market_pair_to_active_orders
-        current_orders = []
-        if mirrored_market_pair in active_orders:
-            current_orders = active_orders[mirrored_market_pair][:]
-        for order in current_orders:
-            self.c_cancel_order(mirrored_market_pair,order.client_order_id)
-        
+    cdef bint is_maker_exchange(self, object market):
+        return market == self.primary_market_pairs[0].market
+
+    cdef bint is_taker_exchange(self, object market):
+        return market == self.mirrored_market_pairs[0].market
+
+    cdef bint _has_different_sign(self, object a, object b):
+        return a * b < 0
+
+    cdef bint _has_reduced(self, object new, object old):
+        return abs(new) < abs(old) or self._has_different_sign(new, old)
 
     cdef c_did_fill_order(self, object order_filled_event):
         cdef:
             str order_id = order_filled_event.order_id
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
-        if market_trading_pair_tuple is not None:
-            if order_filled_event.trade_type == TradeType.BUY:
-                self.total_trading_volume += order_filled_event.amount
-                self.trades_executed += 1
-                if market_trading_pair_tuple.market == self.primary_market_pairs[0].market:
-                    if f"{order_id}COMPLETE" not in self.has_been_offset:
-                        previous_amount_to_offset = self.pm.amount_to_offset
-                        self.pm.register_trade(order_filled_event.price, order_filled_event.amount)
-                        if abs(self.pm.amount_to_offset) < abs(previous_amount_to_offset):
-                            self.cancel_offsetting_orders()
+            object market
+            int side_multiplier = 1 if order_filled_event.trade_type is TradeType.BUY else -1
+            object previous_amount_to_offset = self.pm.amount_to_offset
 
-                        self.primary_base_balance += order_filled_event.amount
-                        if order_id in self.marked_for_deletion.keys():
-                            order = self.marked_for_deletion[order_id]
-                            self.buys_to_replace.append(order["rank"])
-                        self.primary_base_total_balance += order_filled_event.amount
-                        self.primary_quote_total_balance -= order_filled_event.amount * order_filled_event.price
-                        self.has_been_offset.append(order_id)
-                        self.slack_order_filled_message(self.primary_market_pairs[0].market.name, order_filled_event.amount, order_filled_event.price, True)
-                    else:
-                        self.has_been_offset.remove(f"{order_id}COMPLETE")
-                else:
-                    if f"{order_id}COMPLETE" not in self.has_been_offset:
-                        self.pm.register_trade(order_filled_event.price, order_filled_event.amount)
-                        self.offset_quote_exposure -= (order_filled_event.amount * order_filled_event.price)
-                        self.mirrored_base_balance += order_filled_event.amount
-                        self.mirrored_base_total_balance += order_filled_event.amount
-                        self.mirrored_quote_total_balance -= order_filled_event.price * order_filled_event.amount
-                        self.has_been_offset.append(order_id)
-                        self.slack_order_filled_message(self.mirrored_market_pairs[0].market.name, order_filled_event.amount, order_filled_event.price, True)
-                    else:
-                        self.has_been_offset.remove(f"{order_id}COMPLETE")
-                if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
-                    self.log_with_clock(logging.INFO,
-                    f"Limit order filled on {market_trading_pair_tuple[0].name}: {order_id} ({order_filled_event.price}, {order_filled_event.amount})")
-            elif order_filled_event.trade_type == TradeType.SELL:
-                self.total_trading_volume += order_filled_event.amount
-                self.trades_executed += 1
-                if market_trading_pair_tuple.market == self.primary_market_pairs[0].market:
-                    if f"{order_id}COMPLETE" not in self.has_been_offset:
-                        previous_amount_to_offset = self.pm.amount_to_offset
-                        self.pm.register_trade(order_filled_event.price, -order_filled_event.amount)
-                        if abs(self.pm.amount_to_offset) < abs(previous_amount_to_offset):
-                            self.cancel_offsetting_orders()
+        # Verify this is from a market we are tracking
+        if market_trading_pair_tuple is None:
+            return
+        market = market_trading_pair_tuple.market
 
-                        self.primary_quote_balance += order_filled_event.price * order_filled_event.amount
-                        if order_id in self.marked_for_deletion.keys():
-                            order = self.marked_for_deletion[order_id]
-                            self.sells_to_replace.append(order["rank"])
-                        self.primary_quote_total_balance += order_filled_event.price * order_filled_event.amount
-                        self.primary_base_total_balance -= order_filled_event.amount
-                        self.has_been_offset.append(order_id)
-                        self.slack_order_filled_message(self.primary_market_pairs[0].market.name, order_filled_event.amount, order_filled_event.price, False)
+        # Update our common tracking stats
+        self.total_trading_volume += order_filled_event.amount
+        self.trades_executed += 1
+        self.pm.register_trade(order_filled_event.price, side_multiplier * order_filled_event.amount)
+        if self.is_maker_exchange(market):
+            # Inform the strat that we want to replace this level on the maker exchange
+            if order_id in self.marked_for_deletion.keys():
+                    order = self.marked_for_deletion[order_id]
+                    if order["is_buy"]:
+                        self.buys_to_replace.append(order["rank"])
                     else:
-                        self.has_been_offset.remove(f"{order_id}COMPLETE")
-                else:
-                    if f"{order_id}COMPLETE" not in self.has_been_offset:
-                        self.pm.register_trade(order_filled_event.price, -order_filled_event.amount)
-                        self.offset_base_exposure -= order_filled_event.amount
-                        self.mirrored_quote_balance += order_filled_event.price * order_filled_event.amount
-                        self.mirrored_quote_total_balance += order_filled_event.price * order_filled_event.amount
-                        self.mirrored_base_total_balance -= order_filled_event.amount
-                        self.has_been_offset.append(order_id)
-                        self.slack_order_filled_message(self.mirrored_market_pairs[0].market.name, order_filled_event.amount, order_filled_event.price, False)
-                    else:
-                        self.has_been_offset.remove(f"{order_id}COMPLETE")
-                if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
-                    self.log_with_clock(logging.INFO,
-                        f"Limit order filled on {market_trading_pair_tuple[0].name}: {order_id} ({order_filled_event.price}, -{order_filled_event.amount})")
-        for order in self.has_been_offset:
-            if not (order == order_id):
-                self.has_been_offset.remove(order)
+                        self.sells_to_replace.append(order["rank"])
 
-    cdef c_did_create_buy_order(self, object buy_order_created_event):
+        elif self.is_taker_exchange(market):
+            # Update our taker exchange exposures
+            self.offset_order_tracker.fill(order_id, order_filled_event.amount)
+        else:
+            # This should obviously never happen
+            raise Exception(f"Unknown exchange for strategy OrderFillEvent handler: {market.name}")
+
+        # Emit log messages for this event
+        self.slack_order_filled_message(market.name, 
+                                        order_filled_event.amount, 
+                                        order_filled_event.price, 
+                                        order_filled_event.trade_type is TradeType.BUY)
+        if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
+            self.log_with_clock(logging.INFO,
+                                f"Limit order filled on {market.name}: {order_id} ({order_filled_event.price}, {order_filled_event.amount}) Amount to offset: {self.pm.amount_to_offset}")
+
+        # Adjust our offseting orders to account for this fill
+        self._issue_mirrored_orderbook_update()
+
+    cdef _did_create_order(self, object order_created_event):
         cdef:
-            str order_id = buy_order_created_event.order_id
+            str order_id = order_created_event.order_id
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
         if market_trading_pair_tuple is not None:
-            if (market_trading_pair_tuple.market == self.primary_market_pairs[0].market):
-                self.primary_quote_balance -= buy_order_created_event.amount * buy_order_created_event.price
+            if self.is_maker_exchange(market_trading_pair_tuple.market):
                 num_seconds = random.randint(30,50)
                 expiration_time = datetime.timestamp(datetime.now() + timedelta(seconds=num_seconds)) 
                 self.marked_for_deletion[order_id]["time"] = expiration_time
-            elif (market_trading_pair_tuple.market == self.mirrored_market_pairs[0].market):
-                self.mirrored_quote_balance -= buy_order_created_event.amount * buy_order_created_event.price
-                self.offset_quote_exposure += buy_order_created_event.amount * buy_order_created_event.price
+            elif self.is_taker_exchange(market_trading_pair_tuple.market):
+                self.offset_order_tracker.update_order(order_id, OrderState.ACTIVE, Decimal(0))
+
+    cdef c_did_create_buy_order(self, object buy_order_created_event):
+        self._did_create_order(buy_order_created_event)
 
     cdef c_did_create_sell_order(self, object sell_order_created_event):
+        self._did_create_order(sell_order_created_event)
+
+    cdef _did_complete_order(self, object completed_event):
         cdef:
-            str order_id = sell_order_created_event.order_id
+            str order_id = completed_event.order_id
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
         if market_trading_pair_tuple is not None:
-            if (market_trading_pair_tuple.market == self.primary_market_pairs[0].market):
-                self.primary_base_balance -= sell_order_created_event.amount
-                num_seconds = random.randint(30,50)
-                expiration_time = datetime.timestamp(datetime.now() + timedelta(seconds=num_seconds))
-                self.marked_for_deletion[order_id]["time"] = expiration_time
-            elif (market_trading_pair_tuple.market == self.mirrored_market_pairs[0].market):
-                self.mirrored_base_balance -= sell_order_created_event.amount
-                self.offset_base_exposure += sell_order_created_event.amount
+            if self.is_maker_exchange(market_trading_pair_tuple.market):    
+                price = completed_event.quote_asset_amount/completed_event.base_asset_amount
+                if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
+                    self.log_with_clock(logging.INFO,
+                                        f"Limit order completed on {market_trading_pair_tuple[0].name}: {order_id} ({price}, {completed_event.base_asset_amount})")
+                if order_id in self.marked_for_deletion:
+                    del self.marked_for_deletion[order_id]
+            elif self.is_taker_exchange(market_trading_pair_tuple.market):
+                self.offset_order_tracker.complete(order_id)
 
     cdef c_did_complete_buy_order(self, object buy_order_completed_event):
-        """
-        Output log for completed buy order.
-
-        :param buy_order_completed_event: Order completed event
-        """
-        cdef:
-            str order_id = buy_order_completed_event.order_id
-            object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
-        if market_trading_pair_tuple is not None:         
-            price = buy_order_completed_event.quote_asset_amount/buy_order_completed_event.base_asset_amount
-            if market_trading_pair_tuple.market == self.primary_market_pairs[0].market:
-                if order_id not in self.has_been_offset:
-                    self.total_trading_volume += buy_order_completed_event.quote_asset_amount
-                    self.trades_executed += 1
-                    previous_amount_to_offset = self.pm.amount_to_offset
-                    self.pm.register_trade(price, buy_order_completed_event.base_asset_amount)
-                    if abs(self.pm.amount_to_offset) < abs(previous_amount_to_offset):
-                        self.cancel_offsetting_orders()
-
-                    self.primary_base_balance += buy_order_completed_event.base_asset_amount
-                    if order_id in self.marked_for_deletion.keys():
-                        order = self.marked_for_deletion[order_id]
-                        self.buys_to_replace.append(order["rank"])
-                    self.primary_base_total_balance += buy_order_completed_event.base_asset_amount
-                    self.primary_quote_total_balance -= buy_order_completed_event.quote_asset_amount
-                    self.has_been_offset.append(f"{order_id}COMPLETE")
-                    self.slack_order_filled_message(self.primary_market_pairs[0].market.name, buy_order_completed_event.base_asset_amount, price, True)
-            else:
-                if order_id not in self.has_been_offset:
-                    self.total_trading_volume += buy_order_completed_event.quote_asset_amount
-                    self.trades_executed += 1
-                    self.pm.register_trade(price, buy_order_completed_event.base_asset_amount)
-
-                    self.offset_quote_exposure -= buy_order_completed_event.quote_asset_amount
-                    self.mirrored_base_balance += buy_order_completed_event.base_asset_amount
-                    self.mirrored_base_total_balance += buy_order_completed_event.base_asset_amount
-                    self.mirrored_quote_total_balance -= buy_order_completed_event.quote_asset_amount
-                    self.has_been_offset.append(f"{order_id}COMPLETE")
-                    self.slack_order_filled_message(self.mirrored_market_pairs[0].market.name, buy_order_completed_event.base_asset_amount, price, True)
-            if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
-                self.log_with_clock(logging.INFO,
-                                    f"Limit order completed on {market_trading_pair_tuple[0].name}: {order_id} ({price}, {buy_order_completed_event.base_asset_amount})")
-            if order_id in self.marked_for_deletion:
-                del self.marked_for_deletion[order_id]
+        self._did_complete_order(buy_order_completed_event)
 
     cdef c_did_complete_sell_order(self, object sell_order_completed_event):
-        """
-        Output log for completed sell order.
-
-        :param sell_order_completed_event: Order completed event
-        """
-        cdef:
-            str order_id = sell_order_completed_event.order_id
-            object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
-        if market_trading_pair_tuple is not None:
-            price = sell_order_completed_event.quote_asset_amount/sell_order_completed_event.base_asset_amount
-            if market_trading_pair_tuple.market == self.primary_market_pairs[0].market:
-                if order_id not in self.has_been_offset:
-                    self.total_trading_volume += sell_order_completed_event.quote_asset_amount
-                    self.trades_executed += 1
-                    previous_amount_to_offset = self.pm.amount_to_offset
-                    self.pm.register_trade(price, -sell_order_completed_event.base_asset_amount)
-                    if abs(self.pm.amount_to_offset) < abs(previous_amount_to_offset):
-                        self.cancel_offsetting_orders()
-
-                    self.primary_quote_balance += sell_order_completed_event.quote_asset_amount
-                    if order_id in self.marked_for_deletion.keys():
-                        order = self.marked_for_deletion[order_id]
-                        self.sells_to_replace.append(order["rank"])
-                    self.primary_quote_total_balance += sell_order_completed_event.quote_asset_amount
-                    self.primary_base_total_balance -= sell_order_completed_event.base_asset_amount
-                    self.has_been_offset.append(f"{order_id}COMPLETE")
-                    self.slack_order_filled_message(self.primary_market_pairs[0].market.name, sell_order_completed_event.base_asset_amount, price, False)
-            else:
-                if order_id not in self.has_been_offset:
-                    self.total_trading_volume += sell_order_completed_event.quote_asset_amount
-                    self.trades_executed += 1
-                    self.pm.register_trade(price, -sell_order_completed_event.base_asset_amount)
-                    self.offset_base_exposure -= sell_order_completed_event.base_asset_amount
-                    self.mirrored_quote_balance += sell_order_completed_event.quote_asset_amount
-                    self.mirrored_quote_total_balance += sell_order_completed_event.quote_asset_amount
-                    self.mirrored_base_total_balance -= sell_order_completed_event.base_asset_amount
-                    self.has_been_offset.append(f"{order_id}COMPLETE")
-                    self.slack_order_filled_message(self.mirrored_market_pairs[0].market.name, sell_order_completed_event.base_asset_amount, price, False)
-            if self._logging_options & self.OPTION_LOG_ORDER_COMPLETED:
-                self.log_with_clock(logging.INFO,
-                                    f"Limit order completed on {market_trading_pair_tuple[0].name}: {order_id} ({price}, -{sell_order_completed_event.base_asset_amount})")
-            if order_id in self.marked_for_deletion:
-                del self.marked_for_deletion[order_id]
+        self._did_complete_order(sell_order_completed_event)
 
     cdef c_did_fail_order(self, object fail_event):
         """
@@ -536,15 +429,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
         full_order = self._sb_order_tracker.c_get_limit_order(market_trading_pair_tuple, order_id)
         if fail_event.order_type is OrderType.LIMIT:
-            if not self.fail_message_sent:
-                market = market_trading_pair_tuple.market.name
-                price = full_order.price
-                amount = full_order.quantity
-                buy_sell = "BUY" if full_order.is_buy else "SELL"
-                msg = {"msg_type": "order failed", "data": {"market": market, "price": price, "amount": amount, "buy/sell": buy_sell, "id": order_id}}
+            # if not self.fail_message_sent:
+            #     market = market_trading_pair_tuple.market.name
+            #     price = full_order.price
+            #     amount = full_order.quantity
+            #     buy_sell = "BUY" if full_order.is_buy else "SELL"
+            #     msg = {"msg_type": "order failed", "data": {"market": market, "price": price, "amount": amount, "buy/sell": buy_sell, "id": order_id}}
 
-                SlackPusher(self.slack_url, "ORDER FAILED: " + str(msg))
-                self.fail_message_sent = True
+            #     SlackPusher(self.slack_url, "ORDER FAILED: " + str(msg))
+            #     self.fail_message_sent = True
             self._failed_market_order_count += 1
             self._last_failed_market_order_timestamp = fail_event.timestamp
 
@@ -559,15 +452,19 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         if market_trading_pair_tuple is not None:
             self.log_with_clock(logging.INFO,
                 f"Limit order failed on {market_trading_pair_tuple[0].name}: {order_id}")
-            if order_id in self.marked_for_deletion.keys():
-                order = self.marked_for_deletion[order_id]
-                if order["is_buy"]:
-                    if not (order["rank"] in self.buys_to_replace):
-                        self.buys_to_replace.append(order["rank"])
-                else:
-                    if not (order["rank"] in self.sells_to_replace):
-                        self.sells_to_replace.append(order["rank"])
-                del self.marked_for_deletion[order_id]
+            if self.is_maker_exchange(market_trading_pair_tuple.market):
+                if order_id in self.marked_for_deletion.keys():
+                    order = self.marked_for_deletion[order_id]
+                    if order["is_buy"]:
+                        if not (order["rank"] in self.buys_to_replace):
+                            self.buys_to_replace.append(order["rank"])
+                    else:
+                        if not (order["rank"] in self.sells_to_replace):
+                            self.sells_to_replace.append(order["rank"])
+                    del self.marked_for_deletion[order_id]
+            elif self.is_taker_exchange(market_trading_pair_tuple.market):
+                self.offset_order_tracker.fail(order_id)
+                self._issue_mirrored_orderbook_update()
 
     cdef c_did_cancel_order(self, object cancel_event):
         """
@@ -580,163 +477,58 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
         if market_trading_pair_tuple is not None:
             full_order = self._sb_order_tracker.c_get_limit_order(market_trading_pair_tuple, order_id)
-            if order_id in self.marked_for_deletion:
-                order = self.marked_for_deletion[order_id]
-                if order["is_buy"]:
-                    self.buys_to_replace.append(order["rank"])
-                else:
-                    self.sells_to_replace.append(order["rank"])
-                del self.marked_for_deletion[order_id]
-            if market_trading_pair_tuple.market == self.primary_market_pairs[0].market:
-                if full_order.is_buy:
-                    self.primary_quote_balance += full_order.price * full_order.quantity
-                else:
-                    self.primary_base_balance += full_order.quantity
-            else:
-                if full_order.is_buy:
-                    self.mirrored_quote_balance += full_order.price * full_order.quantity
-                    self.offset_quote_exposure -= full_order.quantity * full_order.price
-                else:
-                    self.mirrored_base_balance += full_order.quantity
-                    self.offset_base_exposure -= full_order.quantity
+            if self.is_maker_exchange(market_trading_pair_tuple.market):
+                if order_id in self.marked_for_deletion:
+                    order = self.marked_for_deletion[order_id]
+                    if order["is_buy"]:
+                        self.buys_to_replace.append(order["rank"])
+                    else:
+                        self.sells_to_replace.append(order["rank"])
+                    del self.marked_for_deletion[order_id]
+            elif self.is_taker_exchange(market_trading_pair_tuple.market):
+                self.offset_order_tracker.cancel(order_id)
+                self._issue_mirrored_orderbook_update()
             self.log_with_clock(logging.INFO,
                                 f"Limit order canceled on {market_trading_pair_tuple[0].name}: {order_id}")
 
-    cdef bint c_ready_for_new_orders(self, list market_trading_pair_tuples):
-        """
-        Check whether we are ready for making new mirroring orders or not. Conditions where we should not make further
-        new orders include:
+    cdef object c_get_fee_markup(self, object primary_side, object price, object amount):
+        if self.fee_override is not None:
+            return self.fee_override
 
-         1. There's an in-flight market order that's still being resolved.
-         2. We're still within the cool-off period from the last trade, which means the exchange balances may be not
-            accurate temporarily.
+        return self.c_get_fee_markup_from_exchanges(primary_side, price, amount)
 
-        If none of the above conditions are matched, then we're ready for new orders.
-
-        :param market_trading_pair_tuples: list of mirroring market pairs
-        :return: True if ready, False if not
-        """
+    cdef object c_get_fee_markup_from_exchanges(self, object primary_side, object price, object amount):
         cdef:
-            double time_left
-            dict tracked_taker_orders = self._sb_order_tracker.c_get_taker_orders()
-
-        ready_ts_from_failed_order = (self._last_failed_market_order_timestamp/1000.0) + \
-            self._failed_market_order_count * self.FAILED_ORDER_COOL_OFF_TIME
-        # Wait for FAILED_ORDER_COOL_OFF_TIME * failed_market_order_count before retrying
-        if ready_ts_from_failed_order > self._current_timestamp:
-            time_left = ready_ts_from_failed_order - self._current_timestamp
-            if not self._cool_off_logged:
-                self.log_with_clock(
-                    logging.INFO,
-                    f"Cooling off from failed order. "
-                    f"Resuming in {int(time_left)} seconds."
-                )
-                self._cool_off_logged = True
-            return False
-
-        for market_trading_pair_tuple in market_trading_pair_tuples:
-            # Do not continue if there are pending market order
-            if len(tracked_taker_orders.get(market_trading_pair_tuple, {})) > 0:
-                # consider market order completed if it was already x time old
-                if any([order.timestamp - self._current_timestamp < self.MARKET_ORDER_MAX_TRACKING_TIME
-                       for order in tracked_taker_orders[market_trading_pair_tuple].values()]):
-                    return False
-            # Wait for the cool off interval before the next trade, so wallet balance is up to date
-            ready_to_trade_time = self._last_trade_timestamps.get(market_trading_pair_tuple, 0) + self._next_trade_delay
-            if market_trading_pair_tuple in self._last_trade_timestamps and ready_to_trade_time > self._current_timestamp:
-                time_left = self._current_timestamp - self._last_trade_timestamps[market_trading_pair_tuple] - self._next_trade_delay
-                if not self._cool_off_logged:
-                    self.log_with_clock(
-                        logging.INFO,
-                        f"Cooling off from previous trade on {market_trading_pair_tuple.market.name}. "
-                        f"Resuming in {int(time_left)} seconds."
-                    )
-                    self._cool_off_logged = True
-                return False
-
-        if self._cool_off_logged:
-            self.log_with_clock(
-                logging.INFO,
-                f"Cool off completed. Liquidity Mirroring strategy is now ready for new orders."
-            )
-            # reset cool off log tag when strategy is ready for new orders
-            self._cool_off_logged = False
-
-        return True
-
-    def check_flat_fee_coverage(self, market, flat_fees):
-        covered = True
-        for fee in flat_fees:
-            covered = covered and (market.get_available_balance(fee[0]) > fee[1])
-            if covered == False:
-                break
-        return covered
-
-    def factor_in_fees(self, market: MarketBase, market_pair, price, amount, is_buy, is_primary):
-        fee_object = market.c_get_fee(
-            market_pair.base_asset,
-            market_pair.quote_asset,
-            OrderType.LIMIT,
-            TradeType.BUY if is_buy else TradeType.SELL,
-            amount,
-            price
-        )
-            
-        total_flat_fees = self.c_sum_flat_fees(market_pair.quote_asset,
-                                                   fee_object.flat_fees)
-        fixed_cost_per_unit = total_flat_fees / amount                                                       
-        if (is_buy and is_primary) or ((not is_buy) and (not is_primary)):
-            price_tx = Decimal(price) / (Decimal(1) + fee_object.percent) - fixed_cost_per_unit
+            ExchangeBase primary_market = self.primary_market_pairs[0].market
+            ExchangeBase mirrored_market = self.mirrored_market_pairs[0].market
+        if primary_side is TradeType.BUY:
+            mirrored_side = TradeType.SELL
         else:
-            price_tx = Decimal(price) / (Decimal(1) - fee_object.percent) + fixed_cost_per_unit
-        return price_tx, fee_object
-
-    def check_calculations(self):
-        primary_market = self.primary_market_pairs[0].market
-        mirrored_market = self.mirrored_market_pairs[0].market
+            mirrored_side = TradeType.BUY
         primary_base_asset = self.primary_market_pairs[0].base_asset
         primary_quote_asset = self.primary_market_pairs[0].quote_asset
         mirrored_base_asset = self.mirrored_market_pairs[0].base_asset
         mirrored_quote_asset = self.mirrored_market_pairs[0].quote_asset
-        
-        primary_base_balance = primary_market.get_balance(primary_base_asset)
-        primary_quote_balance = primary_market.get_balance(primary_quote_asset)
-        mirrored_base_balance = mirrored_market.get_balance(mirrored_base_asset) 
-        mirrored_quote_balance = mirrored_market.get_balance(mirrored_quote_asset)
 
-        primary_base_available_balance = primary_market.get_available_balance(primary_base_asset)
-        primary_quote_available_balance = primary_market.get_available_balance(primary_quote_asset)
-        mirrored_base_available_balance = mirrored_market.get_available_balance(mirrored_base_asset) 
-        mirrored_quote_available_balance = mirrored_market.get_available_balance(mirrored_quote_asset)
+        primary_fees = primary_market.c_get_fee(primary_base_asset,
+                                               primary_quote_asset,
+                                               self.mm_order_type,
+                                               primary_side,
+                                               amount,
+                                               price)
+        primary_flat_fee = self.c_sum_flat_fees(primary_quote_asset, primary_fees.flat_fees)
+        mirrored_fees = mirrored_market.c_get_fee(mirrored_base_asset,
+                                               mirrored_quote_asset,
+                                               OrderType.LIMIT,
+                                               mirrored_side,
+                                               amount,
+                                               price)
+        mirrored_flat_fee = self.c_sum_flat_fees(mirrored_quote_asset, mirrored_fees.flat_fees)
 
-        messages : List[str] = []
-        if (abs(primary_base_balance - self.primary_base_total_balance) > Decimal(0.001)):
-            messages.append(f"{primary_market.name}:{primary_base_asset} Old:{str(self.primary_base_total_balance)} New:{str(primary_base_balance)}")
-            self.primary_base_total_balance = primary_base_balance
-        if (abs(primary_quote_balance - self.primary_quote_total_balance) > Decimal(0.001)):
-            messages.append(f"{primary_market.name}:{primary_quote_asset} Old:{str(self.primary_quote_total_balance)} New:{str(primary_quote_balance)}")
-            self.primary_quote_total_balance = primary_quote_balance
-        if (abs(mirrored_base_balance - self.mirrored_base_total_balance) > Decimal(0.001)):
-            messages.append(f"{mirrored_market.name}:{mirrored_base_asset} Old:{str(self.mirrored_base_total_balance)} New:{str(mirrored_base_balance)}")
-            self.mirrored_base_total_balance = mirrored_base_balance
-        if (abs(mirrored_quote_balance - self.mirrored_quote_total_balance) > Decimal(0.001)):
-            messages.append(f"{mirrored_market.name}:{mirrored_quote_asset} Old:{str(self.mirrored_quote_total_balance)} New:{str(mirrored_quote_balance)}")
-            self.mirrored_quote_total_balance = mirrored_quote_balance
-        
-        if (abs(primary_base_available_balance - self.primary_base_balance) > Decimal(0.001)):
-            #messages.append(f"{primary_market.name}:{primary_base_asset}:available Old:{str(self.primary_base_balance)} New:{str(primary_base_available_balance)}")
-            self.primary_base_balance = primary_base_available_balance
-        if (abs(primary_quote_available_balance - self.primary_quote_balance) > Decimal(0.001)):
-            #messages.append(f"{primary_market.name}:{primary_quote_asset}:available Old:{str(self.primary_quote_balance)} New:{str(primary_quote_available_balance)}")
-            self.primary_quote_balance = primary_quote_available_balance
-        if (abs(mirrored_base_available_balance - self.mirrored_base_balance) > Decimal(0.001)):
-            #messages.append(f"{mirrored_market.name}:{mirrored_base_asset}:available Old:{str(self.mirrored_base_balance)} New:{str(mirrored_base_available_balance)}")
-            self.mirrored_base_balance = mirrored_base_available_balance
-        if (abs(mirrored_quote_available_balance - self.mirrored_quote_balance) > Decimal(0.001)):
-            #messages.append(f"{mirrored_market.name}:{mirrored_quote_asset}:available Old:{str(self.mirrored_quote_balance)} New:{str(mirrored_quote_available_balance)}")
-            self.mirrored_quote_balance = mirrored_quote_available_balance
-        if len(messages) > 0:
-            SlackPusher(self.slack_url, "BALANCE DISCREPANCY: " + '\n'.join(messages))
+        total_flat_fees_rate: Decimal = (primary_flat_fee + mirrored_flat_fee) / amount
+        total_fee_rate: Decimal = primary_fees.percent + mirrored_fees.percent + total_flat_fees_rate
+
+        return total_fee_rate
 
     cdef c_check_balances(self):
         current_time = datetime.timestamp(datetime.now())
@@ -794,7 +586,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         # TODO Should return the availabale balance that we have for use in placing new primary market orders
         # this includes all calculations related to ensuring that we have enough balance on the offsetting exchange
         # to cover any fills that we might recieve
-
         return available_base, available_quote
 
     def _place_primary_order(self, order):
@@ -836,7 +627,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         self._place_primary_orders(bids_to_place, available_quote)
         self._place_primary_orders(asks_to_place, available_base)
 
-    def adjust_mirrored_orderbook(self,mirrored_market_pair,best_bid,best_ask):
+    def _manage_offsetting_exposure_threashold_warning(self):
         if not self.offset_beyond_threshold_message_sent:
             if (abs(self.pm.amount_to_offset) > self.max_offsetting_exposure):
                 SlackPusher(self.slack_url, "Offsetting exposure beyond threshold")
@@ -845,66 +636,78 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             if (abs(self.pm.amount_to_offset) < self.max_offsetting_exposure):
                 SlackPusher(self.slack_url, "Offsetting exposure within threshold")
                 self.offset_beyond_threshold_message_sent = False
-        mirrored_market: MarketBase = mirrored_market_pair.market
-        if self.pm.amount_to_offset.is_zero():
-            return
+
+    def _issue_mirrored_orderbook_update(self):
+        safe_ensure_future(self.adjust_mirrored_orderbook())
+
+    def _cancel_offsetting_order(self, mirrored_market_pair, order):
+        if order.state != OrderState.PENDING_CANCEL:
+            self.c_cancel_order(mirrored_market_pair, order.id)
+            order.state = OrderState.PENDING_CANCEL
+
+    def _limit_order_amount(self, mirrored_market: ExchangeBase, mirrored_asset: str, amount: Decimal, quant_price: Decimal, side: TradeType):
+        if side is TradeType.BUY:
+            return min((mirrored_market.get_balance(mirrored_asset)/quant_price), amount)
         else:
-            current_exposure = Decimal(0)
-            active_orders = self._sb_order_tracker.market_pair_to_active_orders
-            current_orders = []
-            if mirrored_market_pair in active_orders:
-                current_orders = active_orders[mirrored_market_pair][:]
+            return min(mirrored_market.get_balance(mirrored_asset), amount)
+        
+
+    async def adjust_mirrored_orderbook(self):
+        async with self.offset_order_tracker:
+            self._manage_offsetting_exposure_threashold_warning()
+            if not self.two_sided_mirroring:
+                return
             
+            mirrored_market_pair = self.mirrored_market_pairs[0]
+            mirrored_market: ExchangeBase = mirrored_market_pair.market
+            current_offsetting_amounts = self.offset_order_tracker.get_total_amounts()
             if self.pm.amount_to_offset < Decimal(0):
-                # we are at a deficit of base. get rid of sell orders
-                for order in current_orders:
-                    quantity = Decimal(order.quantity)
-                    if not order.is_buy:
-                        self.c_cancel_order(mirrored_market_pair,order.client_order_id)
-                    else:
-                        current_exposure += quantity
-                avg_price = self.pm.avg_price
-                if not avg_price.is_zero():
-                    new_price = avg_price * (Decimal(1) + self.max_loss)
-                else:
-                    #should not hit this; if we are offsetting, there should be an extant sell price
-                    new_price = Decimal(best_ask.price)
-
-                amount = ((-1) * self.pm.amount_to_offset) - current_exposure
-                amount = min((self.mirrored_quote_balance/new_price), amount)
-                if (amount >= self.min_mirroring_amount):
-
-                    quant_price = mirrored_market.c_quantize_order_price(mirrored_market_pair.trading_pair, Decimal(new_price))
-                    quant_amount = mirrored_market.c_quantize_order_amount(mirrored_market_pair.trading_pair, Decimal(amount))
-
-                    try:
-                        self.c_buy_with_specific_market(mirrored_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                    except:
-                        pass
-
+                wrong_sided_orders = self.offset_order_tracker.get_asks()
+                right_sided_orders = sorted(self.offset_order_tracker.get_bids(), key = lambda o: o.price, reverse=False)
+                diff : Decimal = abs(self.pm.amount_to_offset) - current_offsetting_amounts.buys
+                max_loss_markdown = (Decimal(1) + self.max_loss)
+                new_order_side = TradeType.BUY
+                place_order_fn = self.buy_with_specific_market
+                mirrored_asset = mirrored_market_pair.quote_asset
             elif self.pm.amount_to_offset > Decimal(0):
-            # we are at a surplus of base. get rid of buy orders
-                for order in current_orders:
-                    quantity = order.quantity
-                    if order.is_buy:
-                        self.c_cancel_order(mirrored_market_pair,order.client_order_id)
-                    else:
-                        current_exposure += quantity
+                wrong_sided_orders = self.offset_order_tracker.get_bids()
+                right_sided_orders = sorted(self.offset_order_tracker.get_asks(), key = lambda o: o.price, reverse=True)
+                diff : Decimal = abs(self.pm.amount_to_offset) - current_offsetting_amounts.sells
+                max_loss_markdown = (Decimal(1) - self.max_loss)
+                new_order_side = TradeType.SELL
+                place_order_fn = self.sell_with_specific_market
+                mirrored_asset = mirrored_market_pair.base_asset
+            else:
+                return
 
-                amount = (self.pm.amount_to_offset) - current_exposure
-                amount = min(amount, self.mirrored_base_balance)
-                if (amount >= self.min_mirroring_amount):
-
-                    avg_price = self.pm.avg_price
-                    if not avg_price.is_zero():
-                        new_price = avg_price * (Decimal(1) - self.max_loss)
-                    else:
-                        # should not hit this. there should be an extant buy
-                        new_price = Decimal(best_bid.price)
-
-                    quant_price = mirrored_market.c_quantize_order_price(mirrored_market_pair.trading_pair, Decimal(new_price))
+            # Get rid of wrong sided orders if there are any
+            for order in wrong_sided_orders:
+                self._cancel_offsetting_order(mirrored_market_pair, order)
+            
+            # Compare current amount to offset vs. current offsetting amount from orders
+            if diff > 0:                
+                # We need to place more offsetting orders
+                new_price = self.pm.avg_price * max_loss_markdown
+                quant_price = mirrored_market.c_quantize_order_price(mirrored_market_pair.trading_pair, Decimal(new_price))
+                amount = self._limit_order_amount(mirrored_market, mirrored_asset, diff, quant_price, new_order_side)
+                if amount >= self.min_mirroring_amount:
                     quant_amount = mirrored_market.c_quantize_order_amount(mirrored_market_pair.trading_pair, Decimal(amount))
-                    try:
-                        self.c_sell_with_specific_market(mirrored_market_pair,Decimal(quant_amount),OrderType.LIMIT,Decimal(quant_price))
-                    except:
-                        pass
+                    if quant_amount > 0:
+                        try:
+                            order_id = place_order_fn(mirrored_market_pair, Decimal(quant_amount), OrderType.LIMIT, Decimal(quant_price))
+                            self.offset_order_tracker.add_order(TrackedOrder(order_id, quant_price, quant_amount, new_order_side, OrderState.PENDING))
+                        except:
+                            self.logger.error(f"Failed to c_{str(new_order_side).lower()}_with_specific_market: {mirrored_market_pair.trading_pair}"\
+                                            f" {Decimal(quant_amount)} {Decimal(quant_price)}")
+
+            elif diff < 0:
+                # We are trying to offset too much compared to our ammount to offset
+                # Attempt to cancel enough to make up the difference, starting with the least likely to execute orders
+                for order in right_sided_orders:
+                    self._cancel_offsetting_order(mirrored_market_pair, order)
+                    diff -= order.amount_remaining
+                    if diff <= 0:
+                        break
+                # We might now be at a deficit of offsetting amount, but we won't place any new orders under the assumption
+                # that some of these cancelled orders will execute before we can cancel them.
+                # If this is not the case, it will be picked up and offset on the next call to this function

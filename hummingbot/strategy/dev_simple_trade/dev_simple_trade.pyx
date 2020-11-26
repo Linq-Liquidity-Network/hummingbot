@@ -14,16 +14,15 @@ from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.limit_order cimport LimitOrder
 from hummingbot.core.data_type.limit_order import LimitOrder
 from hummingbot.core.network_iterator import NetworkStatus
-from hummingbot.core.data_type.order_book cimport OrderBook
-from hummingbot.market.market_base import (
-    MarketBase,
+from hummingbot.connector.exchange_base import ExchangeBase
+from hummingbot.connector.exchange_base cimport ExchangeBase
+from hummingbot.core.event.events import (
     OrderType,
     TradeType
 )
 from libc.stdint cimport int64_t
 from hummingbot.core.data_type.order_book cimport OrderBook
 from datetime import datetime
-from hummingbot.market.market_base cimport MarketBase
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
 from hummingbot.strategy.strategy_base import StrategyBase
 
@@ -102,16 +101,16 @@ cdef class SimpleTradeStrategy(StrategyBase):
         self.c_add_markets(list(all_markets))
 
     @property
-    def active_bids(self) -> List[Tuple[MarketBase, LimitOrder]]:
+    def active_bids(self) -> List[Tuple[ExchangeBase, LimitOrder]]:
         return self._sb_order_tracker.active_bids
 
     @property
-    def active_asks(self) -> List[Tuple[MarketBase, LimitOrder]]:
+    def active_asks(self) -> List[Tuple[ExchangeBase, LimitOrder]]:
         return self._sb_order_tracker.active_asks
 
     @property
-    def active_maker_orders(self) -> List[Tuple[MarketBase, LimitOrder]]:
-        return self._sb_order_tracker.active_maker_orders
+    def active_limit_orders(self) -> List[Tuple[ExchangeBase, LimitOrder]]:
+        return self._sb_order_tracker.active_limit_orders
 
     @property
     def in_flight_cancels(self) -> Dict[str, float]:
@@ -276,7 +275,7 @@ cdef class SimpleTradeStrategy(StrategyBase):
             int64_t last_tick = <int64_t>(self._last_timestamp // self._status_report_interval)
             bint should_report_warnings = ((current_tick > last_tick) and
                                            (self._logging_options & self.OPTION_LOG_STATUS_REPORT))
-            list active_maker_orders = self.active_maker_orders
+            list active_maker_orders = self.active_limit_orders
 
         try:
             if not self._all_markets_ready:
@@ -304,7 +303,7 @@ cdef class SimpleTradeStrategy(StrategyBase):
         :param market_info: a market trading pair
         """
         cdef:
-            MarketBase market = market_info.market
+            ExchangeBase market = market_info.market
             object quantized_amount = market.c_quantize_order_amount(market_info.trading_pair, self._order_amount)
             object quantized_price
 
@@ -350,7 +349,7 @@ cdef class SimpleTradeStrategy(StrategyBase):
         :return: True if user has enough balance, False if not
         """
         cdef:
-            MarketBase market = market_info.market
+            ExchangeBase market = market_info.market
             object base_asset_balance = market.c_get_balance(market_info.base_asset)
             object quote_asset_balance = market.c_get_balance(market_info.quote_asset)
             OrderBook order_book = market_info.order_book
@@ -366,7 +365,7 @@ cdef class SimpleTradeStrategy(StrategyBase):
         :param market_info: a market trading pair
         """
         cdef:
-            MarketBase maker_market = market_info.market
+            ExchangeBase maker_market = market_info.market
             set cancel_order_ids = set()
 
         if self._place_orders:

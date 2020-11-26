@@ -69,6 +69,27 @@ persistence:
     pathRoot: "/home/hummingbot"        
 
 strategies:
+  - name: bc-binance-brl-pax
+    config: trade.bolsacripto.com.binance.brl.pax.yml
+    subfolder: 'bc-binance-brl-pax'
+  - name: bc-binance-btc-brl
+    config: trade.bolsacripto.com.binance.btc.brl.yml
+    subfolder: 'bc-binance-btc-brl'
+  - name: bc-binance-btc-pax
+    config: trade.bolsacripto.com.binance.btc.pax.yml
+    subfolder: 'bc-binance-btc-pax'
+  - name: bc-binance-eth-brl
+    config: trade.bolsacripto.com.binance.eth.brl.yml
+    subfolder: 'bc-binance-eth-brl'
+  - name: bc-binance-eth-btc
+    config: trade.bolsacripto.com.binance.eth.btc.yml
+    subfolder: 'bc-binance-eth-btc'
+  - name: bc-binance-eurs-pax
+    config: trade.bolsacripto.com.binance.eurs.pax.yml
+    subfolder: 'bc-binance-eurs-pax'
+  - name: bc-ftx-brl-pax
+    config: trade.bolsacripto.com.ftx.brl.pax.yml
+    subfolder: 'bc-ftx-brl-pax'
   - name: bc-ftx-btc-brl
     config: trade.bolsacripto.com.ftx.btc.brl.yml
     subfolder: 'bc-ftx-btc-brl'
@@ -78,9 +99,21 @@ strategies:
   - name: bc-ftx-eth-btc
     config: trade.bolsacripto.com.ftx.eth.btc.yml
     subfolder: 'bc-ftx-eth-btc' 
-  - name: binance-ftx-eth-usdt
-    config: binance.ftx.eth.usdt.yml
-    subfolder: 'binance-ftx-eth-usdt'
+  - name: bc-novadax-btc-brl
+    config: trade.bolsacripto.com.noavdax.btc.brl.yml
+    subfolder: 'bc-novadax-btc-brl'
+  - name: bc-novadax-eth-brl
+    config: trade.bolsacripto.com.noavdax.eth.brl.yml
+    subfolder: 'bc-novadax-eth-brl'
+  - name: bc-novadax-eth-btc
+    config: trade.bolsacripto.com.noavdax.eth.btc.yml
+    subfolder: 'bc-novadax-eth-btc'
+  - name: loopring-binance-comp-usdt
+    config: loopring.binance.comp.usdt.yml
+    subfolder: 'loopring-binance-comp-usdt'
+  - name: loopring-binance-eth-usdt
+    config: loopring.binance.eth.usdt.yml
+    subfolder: 'loopring-binance-eth-usdt'
   - name: loopring-binance-lrc-usdt
     config: loopring.binance.lrc.usdt.yml
     subfolder: 'loopring-binance-lrc-usdt'
