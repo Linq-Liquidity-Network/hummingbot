@@ -27,22 +27,6 @@ The default name can be overidded by setting nameOverride in values
 {{- default .Chart.Name .Values.chartName | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "strategy.name" -}}
-{{- $strategy := default "test-strat" .Values.global.strategyName | trunc 63 | trimSuffix "-" -}}
-{{- printf "%s" $strategy  | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
-{{- define "resource.name" -}}
-{{- $strategyName := include "strategy.name" . -}}
-{{- printf "%s" $strategyName | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
-
-{{- define "resource.appName" -}}
-{{- $chartName := include "chart.name" . -}}
-{{- default $chartName .Values.global.appName | trunc 63 | trimSuffix "-" -}}
-{{- end -}}
-
 
 {{- define "image.hummingbot.repository" -}}
 {{- $repository :=  .Values.global.image.hummingbot.repository }}

@@ -9,7 +9,7 @@ tmux send-keys -t hummingbot:hbstrat "python3 bin/hummingbot_quickstart.py" Ente
 
 sleep 5
 
-tmux send-keys -t hummingbot:hbstrat "import ${STRAT_CONF_FILE}" Enter
+tmux send-keys -t hummingbot:hbstrat "import ${CONFIG_FILE_NAME}" Enter
 
 #GET PID by parsing?? or Force PID
 #TAIL PID

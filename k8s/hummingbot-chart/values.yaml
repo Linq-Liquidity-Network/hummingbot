@@ -58,9 +58,7 @@ global:
   syncbotSSHkey: placeholder
   
   options:
-    paperTrade: placeholder
     configPassword: placeholder  
-    strategy: placeholder 
     configFileName: placeholder
 
   # These accounts are our trading accounts. The credentials field is json dictionary with one entry for each
@@ -161,8 +159,14 @@ global:
         - binance-dev1
         - binance-dev1
       strategy: liquidity_mirroring
+      options:
+        paperTrade: true
+        configFileName: strat_conf.yml        
     test-loopring-2:
       accounts:
         - loopring-dev1
         - loopring-dev1
-      strategy: liquidity_mirroring        
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: true
+        configFileName: strat_conf.yml                      

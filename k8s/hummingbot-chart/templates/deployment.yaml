@@ -1,19 +1,16 @@
-{{/* {{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment -}}
-{{- range $strategyName, $strategy := $strategyBlock -}}
-*/}}
 {{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
 {{- range $strategyName, $strategy := $strategyBlock -}}
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: {{ include "resource.name" $ }}
+  name: {{ $strategyName }}
   namespace: {{ include "resource.namespace" $ }}
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        app: {{ include "resource.appName" $ }}
+        app: {{ $strategyName }}
         helm.sh/chart: {{ include "chart.chart" $ }}
         app.kubernetes.io/instance: {{ $.Release.Name }}
         app.kubernetes.io/managed-by: {{ $.Release.Service }}
@@ -28,16 +25,14 @@ spec:
         env: 
         - name: "CONFIG_PASSWORD"
           value: {{ $.Values.global.options.configPassword }}
-        - name: "STRAT_CONF_FILE"
-          value: {{ "/* $strategy.config */" }}
         - name: "CONFIG_FILE_NAME"
-          value: {{ $.Values.global.options.configFileName }}           
+          value: {{ $strategy.options.configFileName }}           
         - name: "SYNCBOT_SSH_KEY"
           value: {{ $.Values.global.syncbotSSHkey }}
         - name: "STRATEGY_NAME"
           value: {{ printf $strategyName }}
         - name: "STRATEGY"
-          value: {{ printf $.Values.global.options.strategy }}
+          value: {{ printf $strategy.strategy }}
         - name: "STRATEGIES_BRANCH"
           value: {{ $.Values.global.releaseBranch }}
         - name: "KEY_FILES_ENCODED"
