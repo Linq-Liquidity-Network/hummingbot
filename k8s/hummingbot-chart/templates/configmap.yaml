@@ -29,7 +29,7 @@ data:
     kill_switch_rate: -100.0
 
     # Paper Trading
-    paper_trade_enabled: {{ .Values.global.options.paper_trade }}
+    paper_trade_enabled: {{ .Values.global.options.paperTrade }}
     paper_trade_account_balance:
     - - USDT
       - 10000

@@ -1,22 +1,25 @@
-{{- $strategyBlock := index .Values .Values.releaseEnvironment -}}
+{{/* {{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment -}}
+{{- range $strategyName, $strategy := $strategyBlock -}}
+*/}}
+{{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
 {{- range $strategyName, $strategy := $strategyBlock -}}
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: {{ include "resource.name" . }}
-  namespace: {{ include "resource.namespace" . }}
+  name: {{ include "resource.name" $ }}
+  namespace: {{ include "resource.namespace" $ }}
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        app: {{ include "resource.appName" . }}
-        helm.sh/chart: {{ include "chart.chart" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app: {{ include "resource.appName" $ }}
+        helm.sh/chart: {{ include "chart.chart" $ }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/managed-by: {{ $.Release.Service }}
     spec:
       imagePullSecrets:
-      - name: {{ .Values.global.imagePullSecrets.default.name }}
+      - name: {{ $.Values.global.imagePullSecrets.default.name }}
       containers: 
       - name: {{ $strategyName }}
         image: {{ include "image.hummingbot.repository" $ }}
@@ -24,17 +27,21 @@ spec:
         args: ["sh", "-c", "./init.sh" ]
         env: 
         - name: "CONFIG_PASSWORD"
-          value: {{ $.Values.global.options.config_password }}
+          value: {{ $.Values.global.options.configPassword }}
         - name: "STRAT_CONF_FILE"
-          value: {{ $strategy.config }}
+          value: {{ "/* $strategy.config */" }}
+        - name: "CONFIG_FILE_NAME"
+          value: {{ $.Values.global.options.configFileName }}           
         - name: "SYNCBOT_SSH_KEY"
           value: {{ $.Values.global.syncbotSSHkey }}
         - name: "STRATEGY_NAME"
           value: {{ printf $strategyName }}
+        - name: "STRATEGY"
+          value: {{ printf $.Values.global.options.strategy }}
         - name: "STRATEGIES_BRANCH"
           value: {{ $.Values.global.releaseBranch }}
         - name: "KEY_FILES_ENCODED"
-          value: {{ include "get-key-data" (dict "accountList" $strategy.accounts) }}
+          value: {{ include "get-key-data" (dict "accountList" $strategy.accounts "Values" $.Values) }}
         volumeMounts:
         - mountPath: /conf-master-data
           name: config-data
