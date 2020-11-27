@@ -59,7 +59,6 @@ global:
   
   options:
     configPassword: placeholder  
-    configFileName: placeholder
 
   # These accounts are our trading accounts. The credentials field is json dictionary with one entry for each
   # of the encrypted key files from hummingbot. No credentials should be defined in this file. Only development
