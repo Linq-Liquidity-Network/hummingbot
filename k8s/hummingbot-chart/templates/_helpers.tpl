@@ -106,8 +106,6 @@ and are then wrapped in angle brackets "{ ... }", to make a valid json dict of t
 Expects a dict as an argument with the entry "accountList".
 */}}
 
-
-
 {{- define "get-key-data" -}}
 {{- /* get-key-data
    * Calls get-key-data.helper to return a JSON string of HB exchange account credentials
