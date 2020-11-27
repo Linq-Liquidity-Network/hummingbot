@@ -9,6 +9,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     key_files = json.loads(encoded_key_files)
-    for key_file_name, contents in key_files.items:
+    for key_file_name, contents in key_files.items():
         with open(f"/home/hummingbot/{key_file_name}", 'w') as f:
             f.write(json.dumps(contents))
+

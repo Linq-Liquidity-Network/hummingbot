@@ -18,7 +18,7 @@ The default name can be overidded by setting nameOverride in values
 
 {{- define "resource.namespace" -}}
 {{- $namespacePrefix := include "resource.releaseTag" . -}}
-{{- $namespaceSuffix := default "test-namespace" .Values.global.namespacePrefix | trunc 63 | trimSuffix "-" -}}
+{{- $namespaceSuffix := default "test-namespace" .Values.global.namespace | trunc 63 | trimSuffix "-" -}}
 {{- printf "%s-%s" $namespacePrefix $namespaceSuffix | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
@@ -121,6 +121,33 @@ and are then wrapped in angle brackets "{ ... }", to make a valid json dict of t
 
 Expects a dict as an argument with the entry "accountList".
 */}}
+
+
+
 {{- define "get-key-data" -}}
-  {{/* TODO */}}
+{{- /* get-key-data
+   * Calls get-key-data.helper to return a JSON string of HB exchange account credentials
+   */ -}}
+{{- $str := include "get-key-data.helper" $ | trim | trimSuffix "," -}}
+{{- printf "{%s}" $str | toJson }}
 {{- end -}}
+
+{{- define "get-key-data.helper" -}}
+{{- /* get-key-data
+   * 
+   */ -}}
+{{- $temp := dict "creds" (dict) -}}
+{{- range $accountName := .accountList -}}
+{{- $account := index $.Values.global.accounts $accountName }}
+{{- /* Set credentials */ -}}
+{{- range $j, $data := $account.credentials -}}
+{{- $_ := set $temp.creds $data.name $data.value -}} 
+{{- end -}}
+{{- end -}}
+{{- /* Format credentials */ -}}
+{{- range $_key, $val := $temp.creds }}
+{{- $key := $_key | quote }}
+{{- printf "%s: %s, "  $key $val }}
+{{- end -}}
+{{- end -}}
+
