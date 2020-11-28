@@ -1,5 +1,6 @@
 {{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
 {{- range $strategyName, $strategy := $strategyBlock -}}
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
@@ -26,7 +27,7 @@ spec:
         - name: "CONFIG_PASSWORD"
           value: {{ $.Values.global.options.configPassword }}
         - name: "CONFIG_FILE_NAME"
-          value: {{ $strategy.options.configFileName }}           
+          value: {{ $strategyName }}           
         - name: "SYNCBOT_SSH_KEY"
           value: {{ $.Values.global.syncbotSSHkey }}
         - name: "STRATEGY_NAME"
@@ -37,18 +38,32 @@ spec:
           value: {{ $.Values.global.releaseBranch }}
         - name: "KEY_FILES_ENCODED"
           value: {{ include "get-key-data" (dict "accountList" $strategy.accounts "Values" $.Values) }}
+        lifecycle: 
+          preStop:
+            exec: 
+              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5;"]     
         volumeMounts:
         - mountPath: /conf-master-data
           name: config-data
-        lifecycle: 
-        - preStop:
-            exec: 
-              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter"; sleep 5;]     
+        - mountPath: /conf
+          name: config-vol
+      initContainers:
+      - name: copy
+        image: {{ include "image.hummingbot.repository" $ }}
+        command: ["bash", "-c", "cp /conf-master-data/* /conf/"]
+        volumeMounts:
+        - mountPath: /conf
+          name: config-vol
+        - mountPath: /conf-master-data
+          name: config-data          
+      volumes:
+      - name: config-vol
+        emptyDir: {}
       - name: config-data
         configMap:
-          name: hummingbot-conf
+          name: {{ $strategyName }}-conf
           items:
           - key: conf_global.yml
             path: conf_global.yml 
----
-{{- end -}}
+
+{{ end }}

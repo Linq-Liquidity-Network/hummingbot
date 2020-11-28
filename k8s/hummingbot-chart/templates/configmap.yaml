@@ -1,9 +1,10 @@
 {{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
-{{- range $strategyName, $strategy := $strategyBlock -}}
+{{- range $strategyName, $strategy := $strategyBlock }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: hummingbot-conf
+  name:  {{ $strategyName }}-conf
   namespace: {{ include "resource.namespace" $ }}
   labels:
     app: {{ $strategyName }}
@@ -117,5 +118,4 @@ data:
 
     SLACK_HOOK: https://hooks.slack.com/services/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
 
----
-{{- end -}}
+{{ end }}
