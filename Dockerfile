@@ -64,7 +64,7 @@ RUN /home/hummingbot/miniconda3/envs/$(head -1 setup/environment-linux.yml | cut
     find . -type f -name "*.cpp" -delete
 
 USER root
-RUN chown -R root:root /home
+RUN chown root:root /home
 
 # Build final image using artifacts from builer
 FROM ubuntu:20.04 AS release
@@ -113,14 +113,14 @@ WORKDIR /home/hummingbot
 
 # Copy all build artifacts from builder image
 USER root
-RUN chown -R root:root /home
+RUN chown root:root /home
 COPY --from=builder --chown=root:root /home/ /home/
 
 # additional configs (sudo)
 COPY docker/etc /etc
 
 # Switch to hummingbot user # Swapped this to after the copy due to https://jira.atlassian.com/browse/BCLOUD-17319
-RUN chown -R hummingbot:hummingbot /home/ /home/ 
+RUN chown -R hummingbot:hummingbot /home/hummingbot/
 USER hummingbot:hummingbot
 
 # Setting bash as default shell because we have .bashrc with customized PATH (setting SHELL affects RUN, CMD and ENTRYPOINT, but not manual commands e.g. `docker run image COMMAND`!)
