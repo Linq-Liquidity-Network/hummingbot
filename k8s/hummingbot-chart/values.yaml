@@ -160,7 +160,7 @@ global:
       strategy: liquidity_mirroring
       options:
         paperTrade: true
-        configFileName: strat_conf.yml        
+        configFileName: liquidity_mirroring_binance_loopring_btc_usdt.yml        
     test-loopring-2:
       accounts:
         - loopring-dev1
@@ -168,4 +168,4 @@ global:
       strategy: liquidity_mirroring
       options:
         paperTrade: true
-        configFileName: strat_conf.yml                      
+        configFileName: pure_market_making_loopring_btc_usdt.yml                      

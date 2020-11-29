@@ -10,6 +10,6 @@ if __name__ == '__main__':
 
     key_files = json.loads(encoded_key_files)
     for key_file_name, contents in key_files.items():
-        with open(f"/home/hummingbot/{key_file_name}", 'w') as f:
+        with open(f"/home/hummingbot/conf/{key_file_name}", 'w') as f:
             f.write(json.dumps(contents))
 

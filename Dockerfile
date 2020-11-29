@@ -53,6 +53,8 @@ COPY --chown=hummingbot:hummingbot LICENSE .
 COPY --chown=hummingbot:hummingbot README.md .
 COPY --chown=hummingbot:hummingbot DATA_COLLECTION.md .
 COPY --chown=hummingbot:hummingbot slack_pusher.py .
+COPY --chown=hummingbot:hummingbot initialize_key_files.py .
+COPY --chown=hummingbot:hummingbot sync_strategies.py .
 COPY --chown=hummingbot:hummingbot init.sh .
 
 # activate hummingbot env when entering the CT

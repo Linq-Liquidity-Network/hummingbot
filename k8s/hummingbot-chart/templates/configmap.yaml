@@ -4,7 +4,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name:  {{ $strategyName }}-conf
+  name:  global-conf-{{ $strategyName }}
   namespace: {{ include "resource.namespace" $ }}
   labels:
     app: {{ $strategyName }}
