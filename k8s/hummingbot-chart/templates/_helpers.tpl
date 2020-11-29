@@ -35,7 +35,6 @@ The default name can be overidded by setting nameOverride in values
 {{- end -}}
 
 
-
 {{- define "node.default" -}}
 {{- $releaseTag :=  include "resource.releaseTag" . }}
 {{- $node := "" -}}
