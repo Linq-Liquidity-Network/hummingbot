@@ -2,7 +2,7 @@ import signal
 import subprocess
 import os
 
-from threading.event import Event
+from threading import Event
 
 sync_request = Event()
 exit_requested = Event()
@@ -12,23 +12,23 @@ class GitHandler:
     def __init__(self, commit_message: str, branch: str, repo: str, dir: str):
         self.commit_message = commit_message
         self.branch = branch
-        self.rep = repo
+        self.repo = repo
         self.dir = dir
 
         self.clone()
 
     def clone(self):
-        subprocess.run(f"git clone {self.repo} {self.dir}", cwd=self.dir)
-        subprocess.run(f"git checkout {self.branch} && git pull", cwd=self.dir)
+        subprocess.run(f"git clone {self.repo} {self.dir}", cwd=self.dir, shell=True)
+        subprocess.run(f"git checkout {self.branch} && git pull", cwd=self.dir, shell=True)
 
     def pull(self):
-        subprocess.run('git pull', cwd=self.dir)
+        subprocess.run('git pull', cwd=self.dir, shell=True)
 
     def commit(self):
-        subprocess.run(f"git commit -a -m\"{self.commit_message}\"", cwd=self.dir)
+        subprocess.run(f"git commit -a -m\"{self.commit_message}\"", cwd=self.dir, shell=True)
 
     def push(self):
-        subprocess.run('git push', cwd=self.dir)
+        subprocess.run('git push', cwd=self.dir, shell=True)
 
 
 if __name__ == '__main__':
@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     # Set our pid for hummingbot to find
     pid = os.getpid()
-    subprocess.run(f"export SYNC_STRATEGIES_PID={pid}")
+    subprocess.run(f"export SYNC_STRATEGIES_PID={pid}", shell=True)
 
     # Setup our signal handlers to catch sync requests
     signal.signal(signal.SIGUSR1, lambda: sync_request.set())
