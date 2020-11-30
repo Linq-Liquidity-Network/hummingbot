@@ -106,6 +106,7 @@ class HummingbotApplication(*commands):
     def strategy_file_name(self, value: str):
         self._strategy_file_name = value
         db_name = value.split(".")[0]
+        db_name = db_name.replace('/', '.')
         self.trade_fill_db = SQLConnectionManager.get_trade_fills_instance(db_name=db_name)
 
     @property
