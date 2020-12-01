@@ -1,4 +1,3 @@
-import re
 from typing import (
     Optional,
     Tuple)
@@ -16,20 +15,9 @@ EXAMPLE_PAIR = "ZRX-ETH"
 DEFAULT_FEES = [0.1, 0.1]
 
 
-def split_trading_pair(trading_pair: str) -> Optional[Tuple[str, str]]:
-    try:
-        m = trading_pair.split("_")
-        return m[0], m[1]
-    # Exceptions are now logged as warnings in trading pair fetcher
-    except Exception as e:
-        return None
-
 def convert_from_exchange_trading_pair(exchange_trading_pair: str) -> Optional[str]:
-    if split_trading_pair(exchange_trading_pair) is None:
-        return None
-    # novadax does not split BASEQUOTE (BTCUSDT)
-    base_asset, quote_asset = split_trading_pair(exchange_trading_pair)
-    return f"{base_asset}-{quote_asset}"
+    return exchange_trading_pair.replace("_", "-")
+
 
 def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
     # novadax does not split BASEQUOTE (BTCUSDT)

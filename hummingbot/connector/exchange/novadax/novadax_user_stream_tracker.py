@@ -16,8 +16,7 @@ from hummingbot.core.utils.async_utils import (
     safe_gather,
 )
 from hummingbot.connector.exchange.novadax.novadax_api_user_stream_data_source import NovadaxAPIUserStreamDataSource
-from novadax import RequestClient as NovaClient
-
+from hummingbot.connector.exchange.novadax.novadax_auth import NovadaxAuth
 
 class NovadaxUserStreamTracker(UserStreamTracker):
     _bust_logger: Optional[HummingbotLogger] = None
@@ -29,11 +28,10 @@ class NovadaxUserStreamTracker(UserStreamTracker):
         return cls._bust_logger
 
     def __init__(self,
-                 data_source_type: UserStreamTrackerDataSourceType = UserStreamTrackerDataSourceType.EXCHANGE_API,
-                 novadax_client: Optional[NovaClient] = None,
+                 novadax_auth: Optional[NovadaxAuth] = None,
                  novadax_uid: str = None):
-        super().__init__(data_source_type=data_source_type)
-        self._novadax_client: NovaClient = novadax_client
+        super().__init__()
+        self._novadax_auth: NovadaxAuth = novadax_auth
         self._novadax_uid = novadax_uid
         self._ev_loop: asyncio.events.AbstractEventLoop = asyncio.get_event_loop()
         self._data_source: Optional[UserStreamTrackerDataSource] = None
@@ -42,10 +40,7 @@ class NovadaxUserStreamTracker(UserStreamTracker):
     @property
     def data_source(self) -> UserStreamTrackerDataSource:
         if not self._data_source:
-            if self._data_source_type is UserStreamTrackerDataSourceType.EXCHANGE_API:
-                self._data_source = NovadaxAPIUserStreamDataSource(novadax_client=self._novadax_client,novadax_uid=self._novadax_uid)
-            else:
-                raise ValueError(f"data_source_type {self._data_source_type} is not supported.")
+            self._data_source = NovadaxAPIUserStreamDataSource(novadax_auth=self._novadax_auth, novadax_uid=self._novadax_uid)
         return self._data_source
 
     @property

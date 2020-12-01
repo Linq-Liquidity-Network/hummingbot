@@ -12,17 +12,13 @@ from typing import (
 )
 
 from hummingbot.logger import HummingbotLogger
-from hummingbot.core.data_type.order_book_tracker import (
-    OrderBookTracker,
-    OrderBookTrackerDataSourceType)
-from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
-from hummingbot.core.data_type.remote_api_order_book_data_source import RemoteAPIOrderBookDataSource
+from hummingbot.core.data_type.order_book_tracker import OrderBookTracker
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange.blocktane.blocktane_api_order_book_data_source import BlocktaneAPIOrderBookDataSource
 from hummingbot.connector.exchange.blocktane.blocktane_active_order_tracker import BlocktaneActiveOrderTracker
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
-from hummingbot.connector.exchange.blocktane.blocktane_utils import convert_to_exchange_trading_pair, convert_from_exchange_trading_pair
+
 
 class BlocktaneOrderBookTracker(OrderBookTracker):
     _bobt_logger: Optional[HummingbotLogger] = None
@@ -113,9 +109,9 @@ class BlocktaneOrderBookTracker(OrderBookTracker):
                 raise
             except Exception:
                 self.logger().network(
-                    f"Unexpected error routing order book messages.",
+                    "Unexpected error routing order book messages.",
                     exc_info=True,
-                    app_warning_msg=f"Unexpected error routing order book messages. Retrying after 5 seconds."
+                    app_warning_msg="Unexpected error routing order book messages. Retrying after 5 seconds."
                 )
                 await asyncio.sleep(5.0)
 
@@ -164,6 +160,6 @@ class BlocktaneOrderBookTracker(OrderBookTracker):
                 self.logger().network(
                     f"Unexpected error tracking order book for {trading_pair}.",
                     exc_info=True,
-                    app_warning_msg=f"Unexpected error tracking order book. Retrying after 5 seconds."
+                    app_warning_msg="Unexpected error tracking order book. Retrying after 5 seconds."
                 )
                 await asyncio.sleep(5.0)

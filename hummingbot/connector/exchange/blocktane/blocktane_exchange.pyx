@@ -100,7 +100,7 @@ cdef class BlocktaneExchange(ExchangeBase):
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
         super().__init__()
-        self._real_time_balance_update = False
+        self._real_time_balance_update = True
         self._account_id = ""
         self._account_available_balances = {}
         self._account_balances = {}
@@ -243,9 +243,6 @@ cdef class BlocktaneExchange(ExchangeBase):
             del self._account_available_balances[asset_name]
             del self._account_balances[asset_name]
 
-        self._in_flight_orders_snapshot = {k: copy.copy(v) for k, v in self._in_flight_orders.items()}
-        self._in_flight_orders_snapshot_timestamp = self._current_timestamp
-
     def _format_trading_rules(self, market_dict: Dict[str, Dict[str, Any]]) -> List[TradingRule]:
         cdef:
             list trading_rules = []
@@ -336,7 +333,6 @@ cdef class BlocktaneExchange(ExchangeBase):
 
         try:
             if current_tick > last_tick and len(self._in_flight_orders) > 0:
-                self.logger().info("Running the _update_order_status loop")
                 tracked_orders = list(self._in_flight_orders.values())
                 for tracked_order in tracked_orders:
                     client_order_id = tracked_order.client_order_id
@@ -484,7 +480,16 @@ cdef class BlocktaneExchange(ExchangeBase):
     async def _user_stream_event_listener(self):
         async for stream_message in self._iter_user_stream_queue():
             try:
-                if stream_message.get('order'): # Updates tracked orders
+                if 'balance' in stream_message:  # Updates balances
+                    balance_updates = stream_message['balance']
+                    for update in balance_updates:
+                        available_balance: Decimal = Decimal(update['balance'])
+                        total_balance: Decimal = available_balance + Decimal(update['locked'])
+                        asset_name = update["currency"].upper()
+                        self._account_available_balances[asset_name] = available_balance
+                        self._account_balances[asset_name] = total_balance
+
+                elif 'order' in stream_message: # Updates tracked orders
                     order = stream_message.get('order')
                     order_status = order["state"]
 
@@ -507,7 +512,6 @@ cdef class BlocktaneExchange(ExchangeBase):
                     new_confirmed_amount = Decimal(order["executed_volume"])
                     executed_amount_base_diff = new_confirmed_amount - tracked_order.executed_amount_base
                     if executed_amount_base_diff > s_decimal_0:
-                        self.logger().info(f"Updated order status with fill from streaming _user_stream_event_listener: {simplejson.dumps(stream_message)}")
                         new_confirmed_quote_amount = new_confirmed_amount * avg_price
                         executed_amount_quote_diff = new_confirmed_quote_amount - tracked_order.executed_amount_quote
                         executed_price = executed_amount_quote_diff / executed_amount_base_diff

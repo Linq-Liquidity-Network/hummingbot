@@ -2,7 +2,7 @@
 ###   Liquidity Mirroring strategy config   ###
 ###############################################
 
-template_version: 4
+template_version: 5
 strategy: null
 
 # The following configuations are only required for the
@@ -19,7 +19,6 @@ max_exposure_base: null
 max_exposure_quote: null
 max_offset_loss: null
 max_total_offset_loss: null
-#equivalent_tokens: null
 min_primary_amount: null
 min_mirroring_amount: null
 bid_amount_ratio_type: null
@@ -27,6 +26,8 @@ ask_amount_ratio_type: null
 bid_amount_ratios: null
 ask_amount_ratios: null
 paper_trade_offset: null
+post_only: null
+fee_override: null
 slack_update_period: null
 max_offsetting_exposure: null
 order_replacement_threshold: null
