@@ -18,6 +18,7 @@ class GitHandler:
         self.clone()
 
     def clone(self):
+        subprocess.run(f"mkdir -p {self.dir}", cwd=self.dir, shell=True)
         subprocess.run(f"git clone {self.repo} {self.dir}", cwd=self.dir, shell=True)
         subprocess.run(f"git checkout {self.branch} && git pull", cwd=self.dir, shell=True)
 

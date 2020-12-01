@@ -20,16 +20,17 @@ spec:
       - name: {{ $.Values.global.imagePullSecrets.default.name }}
       containers: 
       - name: {{ $strategyName }}
-        image: {{- include "image.hummingbot.repository" $  -}}
+        image: {{ include "image.hummingbot.repository" $ }}
         imagePullPolicy: {{ default "Always" $.Values.global.image.hummingbot.imagepullPolicy }}
         args: ["sh", "-c", "./init.sh" ]
         env: 
         - name: "CONFIG_PASSWORD"
           value: {{ $.Values.global.options.configPassword }}
         - name: "CONFIG_FILE_NAME"
-          value: {{ $strategy.options.configFileName }}           
+          value: {{ $strategy.options.configFileName }}
         - name: "SYNCBOT_SSH_KEY"
-          value: {{ $.Values.global.syncbotSSHkey }}
+          value: | {{ $.Values.global.syncbotSSHkey | nindent 12}}
+
         - name: "STRATEGY_NAME"
           value: {{ printf $strategyName }}
         - name: "STRATEGY"

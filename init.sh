@@ -1,4 +1,6 @@
 #!/bin/bash
+eval "$(ssh-agent -s)"
+
 ssh-add - <<< "${SYNCBOT_SSH_KEY}"
 
 tmux new-session -d -s sync_strategies -n hbstrat
@@ -18,3 +20,4 @@ tail -f /dev/null
 
 ###### To attach to Hummingbot Session run
 ##   tmux attach -t hummingbot:hbstrat
+##   tmux attach -t sync_strategies:hbstrat
