@@ -3,6 +3,8 @@ eval "$(ssh-agent -s)"
 
 ssh-add - <<< "${SYNCBOT_SSH_KEY}"
 
+ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
+
 tmux new-session -d -s sync_strategies -n hbstrat
 tmux send-keys -t sync_strategies:hbstrat "python3 /home/hummingbot/sync_strategies.py &" Enter
 

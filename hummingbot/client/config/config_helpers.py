@@ -351,7 +351,7 @@ async def write_config_to_yml(strategy_name, strategy_file_name):
     # Signal gracklebot's sync_strategies module to sync this config to git
     import signal
     import os
-    signal.pidfd_send_signal(int(os.getenv('SYNC_STRATEGIES_PID')), signal.SIGUSR1)
+    os.kill(int(os.getenv('SYNC_STRATEGIES_PID')), signal.SIGUSR1)
     # End gracklebot addition
 
 
