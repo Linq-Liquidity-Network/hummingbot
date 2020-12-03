@@ -26,8 +26,8 @@ spec:
         env: 
         - name: "CONFIG_PASSWORD"
           value: {{ $.Values.global.options.configPassword }}
-        - name: "CONFIG_FILE_NAME"
-          value: {{ $strategy.options.configFileName }}
+        - name: "STRATEGY_FILE_NAME"
+          value: {{ $strategy.options.strategyFileName }}
         - name: "SYNCBOT_SSH_KEY"
           value: | {{ $.Values.global.syncbotSSHkey | nindent 12}}
 
