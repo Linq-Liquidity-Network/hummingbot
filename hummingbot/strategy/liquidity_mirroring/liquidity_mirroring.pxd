@@ -13,7 +13,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         list ask_amounts
         list previous_sells
         list previous_buys
-        list equivalent_tokens
         list buys_to_replace
         list sells_to_replace
         list bid_replace_ranks
@@ -42,12 +41,11 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         object max_total_loss
         object total_trading_volume
         int trades_executed
-        object offset_base_exposure
-        object offset_quote_exposure
         object max_offsetting_exposure
         object min_primary_amount
         object min_mirroring_amount
         object pm
+        object offset_order_tracker
         list bid_amount_percents
         list ask_amount_percents
         bint _all_markets_ready
@@ -63,16 +61,19 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         set _buy_markets
         int64_t _logging_options
         int _failed_order_tolerance
-        bint _cool_off_logged
         int _failed_market_order_count
         object _last_failed_market_order_timestamp
         int cycle_number
         object slack_update_period
+        object mm_order_type
+        object fee_override
 
     cdef c_process_market_pair(self, object market_pair)
-    cdef bint c_ready_for_new_orders(self, list market_trading_pairs)
-    cdef object factor_in_fees(self, market_pair: MarketTradingPairTuple, price: object, amount: object, is_buy: bool, is_primary: bool)
+    cdef object c_get_fee_markup(self, object primary_side, object price, object amount)
+    cdef object c_get_fee_markup_from_exchanges(self, object primary_side, object price, object amount)
     cdef bint is_maker_exchange(self, object market)
     cdef bint is_taker_exchange(self, object market)
     cdef bint _has_different_sign(self, object a, object b)
     cdef bint _has_reduced(self, object new, object old)
+    cdef _did_create_order(self, object order_created_event)
+    cdef _did_complete_order(self, object completed_event)

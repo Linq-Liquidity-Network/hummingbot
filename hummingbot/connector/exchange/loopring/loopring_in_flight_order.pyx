@@ -111,7 +111,7 @@ cdef class LoopringInFlightOrder(InFlightOrderBase):
             client_order_id,
             hash,
             trading_pair,
-            OrderType.LIMIT, # TODO: fix this to the actual type (ie. LIMIT_MAKER)
+            OrderType.LIMIT,
             side,
             Decimal(price),
             Decimal(amount),
@@ -156,7 +156,7 @@ cdef class LoopringInFlightOrder(InFlightOrderBase):
             events.append((MarketEvent.OrderExpired, None, None, None))
 
         if not self.is_done and new_status == LoopringOrderStatus.failed:
-            events.append( (MarketEvent.OrderFailure, None, None, None) )
+            events.append((MarketEvent.OrderFailure, None, None, None))
 
         self.status = new_status
         self.last_state = str(new_status)

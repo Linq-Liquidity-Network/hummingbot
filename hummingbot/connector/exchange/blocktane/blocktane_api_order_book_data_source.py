@@ -21,10 +21,7 @@ import ujson
 import websockets
 from websockets.exceptions import ConnectionClosed
 
-from hummingbot.core.utils import async_ttl_cache
-from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
-from hummingbot.core.data_type.order_book_tracker_entry import OrderBookTrackerEntry
 from hummingbot.core.data_type.order_book_message import OrderBookMessage
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.logger import HummingbotLogger
@@ -40,6 +37,7 @@ EXCHANGE_INFO_URL = "https://bolsa.tokamaktech.net/api/v2/xt/public/markets"
 OrderBookRow = namedtuple("Book", ["price", "amount"])
 
 API_CALL_TIMEOUT = 5
+
 
 class BlocktaneAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
@@ -146,16 +144,13 @@ class BlocktaneAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     msg: str = await asyncio.wait_for(ws.recv(), timeout=self.MESSAGE_TIMEOUT)
                     yield msg
                 except asyncio.TimeoutError:
-                    try:
-                        pong_waiter = await ws.ping()
-                        await asyncio.wait_for(pong_waiter, timeout=self.PING_TIMEOUT)
-                    except asyncio.TimeoutError:
-                        raise
+                    pong_waiter = await ws.ping()
+                    await asyncio.wait_for(pong_waiter, timeout=self.PING_TIMEOUT)
         except asyncio.TimeoutError:
             self.logger().warning("WebSocket ping timed out. Going to reconnect...")
-            return
-        except ConnectionClosed:
-            return
+            raise
+        except websockets.exceptions.ConnectionClosed:
+            raise
         finally:
             await ws.close()
 
@@ -218,7 +213,7 @@ class BlocktaneAPIOrderBookDataSource(OrderBookTrackerDataSource):
                                 metadata={"trading_pair": trading_pair}
                             )
                             output.put_nowait(snapshot_msg)
-                            #self.logger().debug(f"Saved order book snapshot for {trading_pair}")
+                            # self.logger().debug(f"Saved order book snapshot for {trading_pair}")
                             # Be careful not to go above blocktane's API rate limits.
                             await asyncio.sleep(5.0)
                         except asyncio.CancelledError:

@@ -1,31 +1,24 @@
 #!/usr/bin/env python
 
 import asyncio
-import aiohttp
-import hashlib
-import hmac
 import logging
-import os
-import requests
 import time
+import ujson
+import websockets
 from typing import (
     AsyncIterable,
     Dict,
     Optional,
     List
 )
-import ujson
-import websockets
-from datetime import datetime
-from typing import Optional
- 
+
 from hummingbot.core.utils.async_utils import safe_ensure_future
 from hummingbot.connector.exchange.blocktane.blocktane_auth import BlocktaneAuth
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 
+WS_BASE_URL = "wss://bolsa.tokamaktech.net/api/v2/ws/private/?stream=order&stream=trade&stream=balance"
 
-WS_BASE_URL = "wss://bolsa.tokamaktech.net/api/v2/ws/private/?stream=order&stream=trade"
 
 class BlocktaneAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
@@ -49,7 +42,6 @@ class BlocktaneAPIUserStreamDataSource(UserStreamTrackerDataSource):
     @property
     def last_recv_time(self) -> float:
         return self._last_recv_time
-
 
     @staticmethod
     async def wait_til_next_tick(seconds: float = 1.0):
@@ -81,13 +73,13 @@ class BlocktaneAPIUserStreamDataSource(UserStreamTrackerDataSource):
                     self._last_recv_time = time.time()
                     yield msg
                 except asyncio.TimeoutError:
-                        pong_waiter = await ws.ping()
-                        await asyncio.wait_for(pong_waiter, timeout=self.PING_TIMEOUT)
-                        self._last_recv_time = time.time()
-        except asyncio.TimeoutError as e:
+                    pong_waiter = await ws.ping()
+                    await asyncio.wait_for(pong_waiter, timeout=self.PING_TIMEOUT)
+                    self._last_recv_time = time.time()
+        except asyncio.TimeoutError:
             self.logger().warning("WebSocket ping timed out. Going to reconnect...")
             raise
-        except websockets.exceptions.ConnectionClosed as e:
+        except websockets.exceptions.ConnectionClosed:
             raise
         finally:
             await ws.close()

@@ -17,6 +17,8 @@ from hummingbot.core.data_type.order_book_message import (
     OrderBookMessageType
 )
 
+from hummingbot.connector.exchange.novadax.novadax_utils import convert_to_exchange_trading_pair, convert_from_exchange_trading_pair
+
 _bob_logger = None
 
 
@@ -37,24 +39,10 @@ cdef class NovadaxOrderBook(OrderBook):
             msg.update(metadata)
 
         return OrderBookMessage(OrderBookMessageType.SNAPSHOT, {
-            "trading_pair": msg["symbol"],
+            "trading_pair": convert_from_exchange_trading_pair(msg["symbol"]),
             "update_id": msg["timestamp"],
             "bids": msg["bids"],
             "asks": msg["asks"]
-        }, timestamp=timestamp)
-
-    @classmethod
-    def diff_message_from_exchange(cls,
-                                   msg: Dict[str, any],
-                                   timestamp: Optional[float] = None,
-                                   metadata: Optional[Dict] = None) -> OrderBookMessage:
-        if metadata:
-            msg.update(metadata)
-        return OrderBookMessage(OrderBookMessageType.DIFF, {
-            "trading_pair": msg["s"],
-            "update_id": msg["u"],
-            "bids": msg["b"],
-            "asks": msg["a"]
         }, timestamp=timestamp)
 
     @classmethod
@@ -94,6 +82,21 @@ cdef class NovadaxOrderBook(OrderBook):
         }, timestamp=record.timestamp * 1e-3)
 
     @classmethod
+    def restful_snapshot_message_from_exchange(cls,
+                                               msg: Dict[str, any],
+                                               timestamp: float,
+                                               metadata: Optional[Dict] = None) -> OrderBookMessage:
+        if metadata:
+            msg.update(metadata)
+
+        return OrderBookMessage(OrderBookMessageType.SNAPSHOT, {
+            "trading_pair": msg["trading_pair"],
+            "update_id": msg["timestamp"],
+            "bids": msg["bids"],
+            "asks": msg["asks"]
+        }, timestamp=timestamp)
+
+    @classmethod
     def diff_message_from_kafka(cls, record: ConsumerRecord, metadata: Optional[Dict] = None) -> OrderBookMessage:
         msg = ujson.loads(record.value.decode("utf-8"))
         if metadata:
@@ -127,7 +130,7 @@ cdef class NovadaxOrderBook(OrderBook):
             msg.update(metadata)
         ts = msg["ts"]
         return OrderBookMessage(OrderBookMessageType.TRADE, {
-            "trading_pair": msg["symbol"],
+            "trading_pair": convert_from_exchange_trading_pair(msg["symbol"]),
             "trade_type": float(TradeType.SELL.value) if (msg["side"] == "SELL") else float(TradeType.BUY.value),
             "trade_id": ts,
             "update_id": ts,
