@@ -22,7 +22,7 @@ spec:
       - name: {{ $strategyName }}
         image: {{ include "image.hummingbot.repository" $ }}
         imagePullPolicy: {{ default "Always" $.Values.global.image.hummingbot.imagepullPolicy }}
-        args: ["sh", "-c", "./init.sh" ]
+        args: ["bash", "-c", "source /conf/init.sh" ]
         env: 
         - name: "CONFIG_PASSWORD"
           value: {{ $.Values.global.options.configPassword }}
@@ -65,6 +65,8 @@ spec:
           name: global-conf-{{ $strategyName }}
           items:
           - key: conf_global.yml
-            path: conf_global.yml 
+            path: conf_global.yml
+          - key: init.sh
+            path: init.sh
 
 {{ end }}
