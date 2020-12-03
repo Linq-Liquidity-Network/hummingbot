@@ -66,7 +66,7 @@ RUN /home/hummingbot/miniconda3/envs/$(head -1 setup/environment-linux.yml | cut
     find . -type f -name "*.cpp" -delete
 
 USER root
-RUN chown root:root /home
+RUN chown -R root:root /home
 
 # Build final image using artifacts from builer
 FROM ubuntu:20.04 AS release
