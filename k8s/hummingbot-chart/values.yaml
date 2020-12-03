@@ -4,12 +4,14 @@
 
 # Define global variables
 global:
-  namespacePrefix: hummingbot
+  namespace: hummingbot
   releaseTag: placeholder
   name: 
   appName: 
-  chartName:
-  strategyName: liquidity-mirroring
+  chartName: 
+  releaseEnvironment: placeholder  # Either strategiesProd or strategiesDev. Defined in the secret.*.yaml files
+  releaseBranch: placeholder # Either master or develop. Defined in the secrets.*.yaml files  
+  strategyName: placeholder
   
   node:
     feature:
@@ -50,70 +52,119 @@ global:
     default:
       name: regcred
       registry: index.docker.io/v1/
-
+      
   dockerconfigjson: placeholder
-
+      
+  syncbotSSHkey: placeholder
+  
   options:
-    paper_trade: false
-    config_password: placeholder
+    configPassword: placeholder  
 
-persistence:
-  hummingbot_conf:
-    name: conf
-    pathRoot: "/home/hummingbot"
-  hummingbot_logs:
-    name: logs
-    pathRoot: "/home/hummingbot"    
-  hummingbot:
-    name: hummingbot
-    pathRoot: "/home/hummingbot"        
+  # These accounts are our trading accounts. The credentials field is json dictionary with one entry for each
+  # of the encrypted key files from hummingbot. No credentials should be defined in this file. Only development
+  # accounts should be defined in the secrets.dev.yaml, and only production accounts should be defined
+  # in secrets.prod.yaml.  These values will be passed into the container in an env variable, from which
+  # the init.sh will create the necessary key files.
+  # THIS IS THE MOST SENSITIVE credentials IN OUR STACK!
+  accounts2:
+    bolsacripto-prod1:
+      description: "trading@linq.network"
+      credentials: placeholder
+    bolsacripto-dev1:
+      description: "michael@tokamak.ca"
+      credentials: placeholder
+    binance-prod1:
+      description: ""
+      credentials: placeholder
+    binance-dev1:
+      description: ""
+      credentials: placeholder
+    ftx-prod1:
+      description: ""
+      credentials: placeholder
+    ftx-dev1:
+      description: ""
+      credentials: placeholder
+    loopring-dev1:
+      description: "Account #2386"
+      credentials: placeholder
+    loopring-prod1:
+      description: "Account #4553"
+      credentials: placeholder
+    loopring-prod2:
+      description: "Account #4551"
+      credentials: placeholder
+    loopring-prod3:
+      description: "Account #4552"
+      credentials: placeholder
+    binance-dev1:
+      description: 'serviceaccounts@tokamak.ai'
+      credentials: placeholder
 
-strategies:
-  - name: bc-binance-brl-pax
-    config: trade.bolsacripto.com.binance.brl.pax.yml
-    subfolder: 'bc-binance-brl-pax'
-  - name: bc-binance-btc-brl
-    config: trade.bolsacripto.com.binance.btc.brl.yml
-    subfolder: 'bc-binance-btc-brl'
-  - name: bc-binance-btc-pax
-    config: trade.bolsacripto.com.binance.btc.pax.yml
-    subfolder: 'bc-binance-btc-pax'
-  - name: bc-binance-eth-brl
-    config: trade.bolsacripto.com.binance.eth.brl.yml
-    subfolder: 'bc-binance-eth-brl'
-  - name: bc-binance-eth-btc
-    config: trade.bolsacripto.com.binance.eth.btc.yml
-    subfolder: 'bc-binance-eth-btc'
-  - name: bc-binance-eurs-pax
-    config: trade.bolsacripto.com.binance.eurs.pax.yml
-    subfolder: 'bc-binance-eurs-pax'
-  - name: bc-ftx-brl-pax
-    config: trade.bolsacripto.com.ftx.brl.pax.yml
-    subfolder: 'bc-ftx-brl-pax'
-  - name: bc-ftx-btc-brl
-    config: trade.bolsacripto.com.ftx.btc.brl.yml
-    subfolder: 'bc-ftx-btc-brl'
-  - name: bc-ftx-btc-pax
-    config: trade.bolsacripto.com.ftx.btc.pax.yml
-    subfolder: 'bc-ftx-btc-pax'
-  - name: bc-ftx-eth-btc
-    config: trade.bolsacripto.com.ftx.eth.btc.yml
-    subfolder: 'bc-ftx-eth-btc' 
-  - name: bc-novadax-btc-brl
-    config: trade.bolsacripto.com.noavdax.btc.brl.yml
-    subfolder: 'bc-novadax-btc-brl'
-  - name: bc-novadax-eth-brl
-    config: trade.bolsacripto.com.noavdax.eth.brl.yml
-    subfolder: 'bc-novadax-eth-brl'
-  - name: bc-novadax-eth-btc
-    config: trade.bolsacripto.com.noavdax.eth.btc.yml
-    subfolder: 'bc-novadax-eth-btc'
-  - name: loopring-binance-comp-usdt
-    config: loopring.binance.comp.usdt.yml
-    subfolder: 'loopring-binance-comp-usdt'
-  - name: loopring-binance-eth-usdt
-    config: loopring.binance.eth.usdt.yml
-    subfolder: 'loopring-binance-eth-usdt'
-  - name: loopring-binance-lrc-usdt
-    config: loopring.binance.lrc.usdt.yml
-    subfolder: 'loopring-binance-lrc-usdt'
+
+
+  # Strategies to launch on production.
+  # There will be one pod for each sub-entry of strategiesProd - each with one container
+  # for each of thier sub-entries.
+  strategiesProd:
+    lm-bolsacripto-ftx-btc-brl:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+      strategy: liquidity_mirroring
+    lm-bolsacripto-ftx-btc-pax:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+      strategy: liquidity_mirroring
+    lm-bolsacripto-ftx-eth-btc:
+      accounts: 
+        - bolsacripto-prod1
+        - ftx-prod1
+      strategy: liquidity_mirroring        
+    lm-bolsacripto-ftx-brl-pax:
+      accounts:
+        - bolsacripto-prod1
+        - ftx-prod1
+      strategy: liquidity_mirroring        
+    lm-loopring-binance-lrc-usdt:
+      accounts:
+        - loopring-prod2
+        - binance-prod1
+      strategy: liquidity_mirroring
+
+  # Strategies to launch on development.
+  # There will be one pod for each sub-entry of strategiesDev - each with one container
+  # for each of thier sub-entries.
+  strategiesDev:
+    #lm-bolsacripto-ftx-btc-brl:
+    #  accounts: 
+    #    - bolsacripto-dev1
+    #    - ftx-dev1
+    #lm-bolsacripto-ftx-btc-pax:
+    #  accounts: 
+    #    - bolsacripto-dev1
+    #    - ftx-dev1
+    #lm-bolsacripto-ftx-eth-btc:
+    #  accounts: 
+    #    - bolsacripto-dev1
+    #    - ftx-dev1
+    #lm-bolsacripto-novadax-eth-btc:
+    #  accounts:
+    #    - bolsacripto-dev1
+    #    - novadax-dev1
+    test-binance:
+      accounts:
+        - binance-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: true
+        strategyFileName: "conf_pure_mm_1.yml"    
+    test-loopring-2:
+      accounts:
+        - loopring-dev1
+        - loopring-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: true
+        strategyFileName: pure_market_making_loopring_btc_usdt.yml
