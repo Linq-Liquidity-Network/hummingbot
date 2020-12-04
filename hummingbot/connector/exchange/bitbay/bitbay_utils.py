@@ -6,9 +6,9 @@ from hummingbot.client.config.config_methods import using_exchange
 
 CENTRALIZED = True
 
-EXAMPLE_PAIR = "LRC-ETH"
+EXAMPLE_PAIR = "ETH-USD"
 
-DEFAULT_FEES = [0.0, 0.2]
+DEFAULT_FEES = [0.28, 0.41]
 
 BITBAY_ROOT_API = "https://bitbay.net/API/Public/"
 

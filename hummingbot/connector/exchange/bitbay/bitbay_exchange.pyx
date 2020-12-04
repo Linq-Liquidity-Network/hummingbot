@@ -286,11 +286,12 @@ cdef class BitbayExchange(ExchangeBase):
             self.start_tracking(in_flight_order)
             try:
                 self._awaiting_response += 1
-                creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
+                creation_response = await self.place_order(in_flight_order.client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
             except asyncio.exceptions.TimeoutError:
                 # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status 
                 # updates mark this as cancelled if it doesn't actually exist.
+                self.logger().info("Time out error occurred")
                 pass
 
             # Verify the response from the exchange
@@ -313,10 +314,6 @@ cdef class BitbayExchange(ExchangeBase):
             self.logger().warning(f"Error submitting {order_side.name} {order_type.name} order to bitbay for "
                                   f"{amount} {trading_pair} at {price}.")
             self.logger().info(e)
-
-            # Stop tracking this order
-            self.c_stop_tracking_order(client_order_id)
-            self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
 
     async def execute_buy(self,
                           order_id: str,
@@ -395,6 +392,7 @@ cdef class BitbayExchange(ExchangeBase):
             if 'OFFER_NOT_FOUND' in errors:
                 # Order didn't exist on exchange, mark this as canceled
                 self.c_trigger_event(ORDER_CANCELLED_EVENT,cancellation_event)
+                self.c_stop_tracking_order(client_order_id)
             elif len(errors) > 0 and not ('OFFER_NOT_FOUND' in errors):
                 raise Exception(f"Cancel order returned errors {errors}")
             else:
