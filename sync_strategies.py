@@ -42,7 +42,7 @@ if __name__ == '__main__':
     subprocess.run(f"mkdir -p '{strategy_dir}'", shell=True)
 
     # Setup our signal handlers to catch sync requests
-    signal.signal(signal.SIGUSR1, lambda: sync_request.set())
+    signal.signal(signal.SIGUSR1, sync_request.set)
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
 
