@@ -160,11 +160,11 @@ global:
       options:
         paperTrade: true
         strategyFileName: "conf_pure_mm_1.yml"    
-    test-loopring-2:
-      accounts:
-        - loopring-dev1
-        - loopring-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: true
-        strategyFileName: pure_market_making_loopring_btc_usdt.yml
+    #test-loopring-2:
+    #  accounts:
+    #    - loopring-dev1
+    #    - loopring-dev1
+    #  strategy: liquidity_mirroring
+    #  options:
+    #    paperTrade: true
+    #    strategyFileName: pure_market_making_loopring_btc_usdt.yml

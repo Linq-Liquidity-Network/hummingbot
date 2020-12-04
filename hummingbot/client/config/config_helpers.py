@@ -346,6 +346,12 @@ def save_to_yml(yml_path: str, cm: Dict[str, ConfigVar]):
                     data[key] = cvar.value
             with open(yml_path, "w+") as outfile:
                 yaml_parser.dump(data, outfile)
+        # Signal gracklebot's sync_strategies module to sync this config to git
+        import signal
+        import os
+        os.kill(int(os.getenv('SYNC_STRATEGIES_PID')), signal.SIGUSR1)
+        # End gracklebot addition
+
     except Exception as e:
         logging.getLogger().error("Error writing configs: %s" % (str(e),), exc_info=True)
 
@@ -355,12 +361,6 @@ async def write_config_to_yml(strategy_name, strategy_file_name):
     strategy_file_path = join(CONF_FILE_PATH, strategy_file_name)
     save_to_yml(strategy_file_path, strategy_config_map)
     save_to_yml(GLOBAL_CONFIG_PATH, global_config_map)
-
-    # Signal gracklebot's sync_strategies module to sync this config to git
-    import signal
-    import os
-    os.kill(int(os.getenv('SYNC_STRATEGIES_PID')), signal.SIGUSR1)
-    # End gracklebot addition
 
 
 async def create_yml_files():
