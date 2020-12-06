@@ -63,6 +63,7 @@ spec:
       - name: config-data
         configMap:
           name: global-conf-{{ $strategyName }}
+          defaultMode: 0777
           items:
           - key: conf_global.yml
             path: conf_global.yml

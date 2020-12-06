@@ -32,17 +32,14 @@ class GitHandler:
 
 
 if __name__ == '__main__':
-    def exit_gracefully():
+    def exit_gracefully(x,y):
         exit_requested.set()
         sync_request.set()
 
-    # Set our pid for hummingbot to find
-    pid = os.getpid()
-    subprocess.run(f"export SYNC_STRATEGIES_PID={pid}", shell=True)
     subprocess.run(f"mkdir -p '{strategy_dir}'", shell=True)
 
     # Setup our signal handlers to catch sync requests
-    signal.signal(signal.SIGUSR1, sync_request.set)
+    signal.signal(signal.SIGUSR1, lambda x,y: sync_request.set() )
     signal.signal(signal.SIGINT, exit_gracefully)
     signal.signal(signal.SIGTERM, exit_gracefully)
 

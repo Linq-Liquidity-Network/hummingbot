@@ -159,7 +159,7 @@ global:
       strategy: liquidity_mirroring
       options:
         paperTrade: true
-        strategyFileName: "conf_pure_mm_1.yml"    
+        strategyFileName: "strategies/conf_pure_mm_1.yml"    
     #test-loopring-2:
     #  accounts:
     #    - loopring-dev1
