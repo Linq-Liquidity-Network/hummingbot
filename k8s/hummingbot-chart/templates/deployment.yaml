@@ -1,55 +1,73 @@
+{{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
+{{- range $strategyName, $strategy := $strategyBlock -}}
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
-  name: {{ include "resource.name" . }}
-  namespace: {{ include "resource.namespace" . }}
+  name: {{ $strategyName }}
+  namespace: {{ include "resource.namespace" $ }}
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        app: {{ include "resource.appName" . }}
-        helm.sh/chart: {{ include "chart.chart" . }}
-        app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/managed-by: {{ .Release.Service }}
+        app: {{ $strategyName }}
+        helm.sh/chart: {{ include "chart.chart" $ }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/managed-by: {{ $.Release.Service }}
     spec:
       imagePullSecrets:
-      - name: {{ .Values.global.imagePullSecrets.default.name }}
-      containers:
-      {{ range $i, $strategy := .Values.strategies -}}     
-      - name: {{ $strategy.name }}
+      - name: {{ $.Values.global.imagePullSecrets.default.name }}
+      containers: 
+      - name: {{ $strategyName }}
         image: {{ include "image.hummingbot.repository" $ }}
         imagePullPolicy: {{ default "Always" $.Values.global.image.hummingbot.imagepullPolicy }}
-        args: ["sh", "-c", "./init.sh" ]
+        args: ["bash", "-c", "source /conf/init.sh" ]
         env: 
         - name: "CONFIG_PASSWORD"
-          value: {{ $.Values.global.options.config_password }}
-        - name: "STRAT_CONF_FILE"
-          value: {{ $strategy.config }}
-        volumeMounts:
-        - mountPath: /conf-master-data
-          name: config-data
-        - mountPath: /home/hummingbot/conf
-          name: conf-{{ $strategy.subfolder }}-vol
-        - mountPath: /home/hummingbot/logs
-          name: log-{{ $strategy.subfolder }}-vol 
+          value: {{ $.Values.global.options.configPassword }}
+        - name: "STRATEGY_FILE_NAME"
+          value: {{ $strategy.options.strategyFileName }}
+        - name: "SYNCBOT_SSH_KEY"
+          value: | {{ $.Values.global.syncbotSSHkey | nindent 12}}
+
+        - name: "STRATEGY_NAME"
+          value: {{ printf $strategyName }}
+        - name: "STRATEGY"
+          value: {{ printf $strategy.strategy }}
+        - name: "STRATEGIES_BRANCH"
+          value: {{ $.Values.global.releaseBranch }}
+        - name: "KEY_FILES_ENCODED"
+          value: {{ include "get-key-data" (dict "accountList" $strategy.accounts "Values" $.Values) }}
         lifecycle: 
           preStop:
             exec: 
-              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5;"]
-      {{ end -}}
+              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5;"]     
+        volumeMounts:
+        - mountPath: /conf-master-data
+          name: config-data
+        - mountPath: /conf
+          name: config-vol
+      initContainers:
+      - name: copy
+        image: {{ include "image.hummingbot.repository" $ }}
+        command: ["bash", "-c", "cp /conf-master-data/* /conf/"]
+        volumeMounts:
+        - mountPath: /conf
+          name: config-vol
+        - mountPath: /conf-master-data
+          name: config-data          
       volumes:
-      {{ range $i, $strategy := .Values.strategies -}}   
-      - name: log-{{ $strategy.subfolder }}-vol
-        persistentVolumeClaim:
-          claimName: {{include "hummingbot.logs.pv.name" $ }}-{{ $strategy.subfolder }}      
-      - name: conf-{{ $strategy.subfolder }}-vol
-        persistentVolumeClaim:
-          claimName: {{include "hummingbot.conf.pv.name" $ }}-{{ $strategy.subfolder }} 
-      {{ end -}}                      
+      - name: config-vol
+        emptyDir: {}
       - name: config-data
         configMap:
-          name: hummingbot-conf
+          name: global-conf-{{ $strategyName }}
+          defaultMode: 0777
           items:
           - key: conf_global.yml
-            path: conf_global.yml 
+            path: conf_global.yml
+          - key: init.sh
+            path: init.sh
+
+{{ end }}
