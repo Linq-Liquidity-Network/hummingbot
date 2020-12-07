@@ -1,6 +1,7 @@
 import signal
 import subprocess
 import os
+import time
 
 from threading import Event
 
@@ -54,6 +55,9 @@ if __name__ == '__main__':
     while(not exit_requested.set()):
         sync_request.wait()
         sync_request.clear()
+        #print("<SIGUSR1> received. Syncing with remote in 2 min...")
+        #time.sleep(120)
         git.pull()
         git.commit()
         git.push()
+        #print("... Sync complete")
