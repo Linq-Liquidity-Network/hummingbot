@@ -50,8 +50,8 @@ logging.basicConfig(level=METRICS_LOG_LEVEL)
 API_MOCK_ENABLED = conf.mock_api_enabled is not None and conf.mock_api_enabled.lower() in ['true', 'yes', '1']
 API_KEY = "XXX" if API_MOCK_ENABLED else conf.blocktane_api_key
 API_SECRET = "YYY" if API_MOCK_ENABLED else conf.blocktane_api_secret
-API_BASE_URL = "trade.bolsacripto.com/api/v2/xt"
-WS_BASE_URL = "wss://trade.bolsacripto.com/api/v2/ws/public"
+API_BASE_URL = "trade.blocktane.io/api/v2/xt"
+WS_BASE_URL = "wss://trade.blocktane.io/api/v2/ws/public"
 logging.basicConfig(level=METRICS_LOG_LEVEL)
 
 class BlocktaneExchangeUnitTest(unittest.TestCase):
@@ -71,7 +71,7 @@ class BlocktaneExchangeUnitTest(unittest.TestCase):
     market: BlocktaneExchange
     market_logger: EventLogger
     stack: contextlib.ExitStack
-    base_api_url = "trade.bolsacripto.com"
+    base_api_url = "trade.blocktane.io"
 
     @classmethod
     def setUpClass(cls):
@@ -103,7 +103,7 @@ class BlocktaneExchangeUnitTest(unittest.TestCase):
             cls.web_app.update_response("post", cls.base_api_url, "/api/v2/xt/market/orders", FixtureBlocktane.ORDER_MARKET_OPEN_BUY)
             cls.web_app.update_response("get", cls.base_api_url, "/api/v2/xt/public/markets/fthusd/depth", FixtureBlocktane.MARKETS_DEPTH)
 
-            ws_base_url = "wss://trade.bolsacripto.com/api/v2/ws/public"
+            ws_base_url = "wss://trade.blocktane.io/api/v2/ws/public"
             cls._ws_user_url = f"{ws_base_url}/?stream=order&stream=trade"
             HummingWsServerFactory.url_host_only = True
             HummingWsServerFactory.start_new_server(cls._ws_user_url)
