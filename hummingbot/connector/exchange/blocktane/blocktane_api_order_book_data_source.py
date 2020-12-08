@@ -28,11 +28,11 @@ from hummingbot.logger import HummingbotLogger
 from hummingbot.connector.exchange.blocktane.blocktane_order_book import BlocktaneOrderBook
 from hummingbot.connector.exchange.blocktane.blocktane_utils import convert_to_exchange_trading_pair, convert_from_exchange_trading_pair
 
-BLOCKTANE_REST_URL = "https://trade.bolsacripto.com/api/v2/xt/public"
-DIFF_STREAM_URL = "wss://trade.bolsacripto.com/api/v2/ws/public"
-TICKER_PRICE_CHANGE_URL = "https://trade.bolsacripto.com/api/v2/xt/public/markets/tickers"
-SINGLE_MARKET_DEPTH_URL = "https://trade.bolsacripto.com/api/v2/xt/public/markets/{}/depth"
-EXCHANGE_INFO_URL = "https://trade.bolsacripto.com/api/v2/xt/public/markets"
+BLOCKTANE_REST_URL = "https://trade.blocktane.io/api/v2/xt/public"
+DIFF_STREAM_URL = "wss://trade.blocktane.io/api/v2/ws/public"
+TICKER_PRICE_CHANGE_URL = "https://trade.blocktane.io/api/v2/xt/public/markets/tickers"
+SINGLE_MARKET_DEPTH_URL = "https://trade.blocktane.io/api/v2/xt/public/markets/{}/depth"
+EXCHANGE_INFO_URL = "https://trade.blocktane.io/api/v2/xt/public/markets"
 
 OrderBookRow = namedtuple("Book", ["price", "amount"])
 
