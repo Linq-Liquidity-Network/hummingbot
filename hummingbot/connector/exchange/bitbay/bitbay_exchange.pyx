@@ -126,7 +126,7 @@ cdef class BitbayExchange(ExchangeBase):
     def __init__(self,
                  bitbay_private_key: str,
                  bitbay_api_key: str,
-                 poll_interval: float = 10.0,
+                 poll_interval: float = 5.0,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
 
@@ -300,7 +300,19 @@ cdef class BitbayExchange(ExchangeBase):
 
             status = creation_response["status"]
             if status != 'Ok':
-                raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
+                self._awaiting_response -= 1
+                if status == 'Fail':
+                    self.c_stop_tracking_order(client_order_id)
+                    self.logger().warning(
+                        f"Error submitting {order_side.name} {order_type.name} order to Bitbay for "
+                        f"{amount} {trading_pair} "
+                        f"{price}.",
+                        exc_info=True,
+                    )
+                    self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
+                    return
+                else:
+                    raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
 
             bitbay_order_hash = creation_response["offerId"]
             in_flight_order.update_exchange_order_id(bitbay_order_hash)
