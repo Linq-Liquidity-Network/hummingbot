@@ -126,7 +126,7 @@ cdef class BitbayExchange(ExchangeBase):
     def __init__(self,
                  bitbay_private_key: str,
                  bitbay_api_key: str,
-                 poll_interval: float = 10.0,
+                 poll_interval: float = 5.0,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
 
@@ -292,6 +292,7 @@ cdef class BitbayExchange(ExchangeBase):
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status 
                 # updates mark this as cancelled if it doesn't actually exist.
                 self.logger().info("Time out error occurred")
+                self._awaiting_response -= 1
                 pass
 
             # Verify the response from the exchange
@@ -300,7 +301,19 @@ cdef class BitbayExchange(ExchangeBase):
 
             status = creation_response["status"]
             if status != 'Ok':
-                raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
+                self._awaiting_response -= 1
+                if status == 'Fail':
+                    self.c_stop_tracking_order(client_order_id)
+                    self.logger().warning(
+                        f"Error submitting {order_side.name} {order_type.name} order to Bitbay for "
+                        f"{amount} {trading_pair} "
+                        f"{price}.",
+                        exc_info=True,
+                    )
+                    self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
+                    return
+                else:
+                    raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
 
             bitbay_order_hash = creation_response["offerId"]
             in_flight_order.update_exchange_order_id(bitbay_order_hash)
@@ -617,6 +630,7 @@ cdef class BitbayExchange(ExchangeBase):
                 await asyncio.sleep(1.0)
 
     async def _user_stream_event_listener(self):
+        self._check_message_queue()
         async for event_message in self._iter_user_event_queue():
             try:
                 event: Dict[str, Any] = event_message
@@ -625,10 +639,10 @@ cdef class BitbayExchange(ExchangeBase):
                 if topic == 'balance':
                     await self._set_balances([data], is_snapshot=False)
                 elif topic == 'offers':
-                    if self._awaiting_response > 0:
+                    exchange_order_id: str = data['offerId']
+                    if exchange_order_id not in self._in_flight_orders_by_exchange_id:
                         self._user_stream_message_queue.append(data)
                     else:
-                        exchange_order_id: str = data['offerId']
                         tracked_order: BitbayInFlightOrder = self._in_flight_orders_by_exchange_id.get(exchange_order_id)
 
                         if tracked_order is None:
@@ -695,7 +709,7 @@ cdef class BitbayExchange(ExchangeBase):
                 self.logger().warning("Error updating trading rules")
                 self.logger().warning(str(e))
 
-    async def _update_order_status(self):
+    async def _check_message_queue(self):
         if self._awaiting_response == 0:
             while len(self._user_stream_message_queue) > 0:
                 data = self._user_stream_message_queue.pop()
@@ -709,6 +723,9 @@ cdef class BitbayExchange(ExchangeBase):
                     continue
 
                 self._update_inflight_order(tracked_order, data)
+
+    async def _update_order_status(self):
+        await self._check_message_queue()
 
         tracked_orders = self._in_flight_orders.copy()
 
