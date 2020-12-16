@@ -42,7 +42,7 @@ spec:
         lifecycle: 
           preStop:
             exec: 
-              command: ["sh", "-t", "tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5; tmux send-keys -t hummingbot:hbstrat stop Enter; sleep 5;"]     
+              command: ["bash", "-c", "source /conf/quit.sh"]     
         volumeMounts:
         - mountPath: /conf-master-data
           name: config-data
@@ -69,5 +69,7 @@ spec:
             path: conf_global.yml
           - key: init.sh
             path: init.sh
+          - key: quit.sh
+            path: quit.sh            
 
 {{ end }}
