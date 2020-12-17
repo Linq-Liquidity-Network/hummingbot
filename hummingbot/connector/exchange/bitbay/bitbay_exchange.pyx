@@ -319,6 +319,15 @@ cdef class BitbayExchange(ExchangeBase):
             in_flight_order.update_exchange_order_id(bitbay_order_hash)
             self._in_flight_orders_by_exchange_id[bitbay_order_hash] = in_flight_order
             self._awaiting_response -= 1
+            if creation_response["completed"] == True:
+                for transaction in creation_response["transactions"]:
+                    data = {
+                        "market": trading_pair,
+                        "startAmount": amount,
+                        "currentAmount": transaction['amount'],
+                        "rate": transaction['rate']
+                    }
+                    self._update_inflight_order(in_flight_order, data)
             # Begin tracking order
             self.logger().info(
                 f"Created {in_flight_order.description} order {client_order_id} for {amount} {trading_pair}.")
