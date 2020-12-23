@@ -13,30 +13,18 @@ DEFAULT_FEES = [0.0, 0.2]
 UPBIT_ROOT_API = "https://api.upbit.com/v1"
 
 KEYS = {
-    "loopring_accountid":
-        ConfigVar(key="loopring_accountid",
-                  prompt="Enter your Loopring account id >>> ",
-                  required_if=using_exchange("loopring"),
+    "upbit_api_key":
+        ConfigVar(key="upbit_api_key",
+                  prompt="Enter your upbit api key >>> ",
+                  required_if=using_exchange("upbit"),
                   is_secure=True,
                   is_connect_key=True),
-    "loopring_exchangeid":
-        ConfigVar(key="loopring_exchangeid",
-                  prompt="Enter the Loopring exchange id >>> ",
-                  required_if=using_exchange("loopring"),
+    "upbit_private_key":
+        ConfigVar(key="upbit_private_key",
+                  prompt="Enter your upbit private key >>> ",
+                  required_if=using_exchange("upbit"),
                   is_secure=True,
                   is_connect_key=True),
-    "loopring_private_key":
-        ConfigVar(key="loopring_private_key",
-                  prompt="Enter your Loopring private key >>> ",
-                  required_if=using_exchange("loopring"),
-                  is_secure=True,
-                  is_connect_key=True),
-    "loopring_api_key":
-        ConfigVar(key="loopring_api_key",
-                  prompt="Enter your loopring api key >>> ",
-                  required_if=using_exchange("loopring"),
-                  is_secure=True,
-                  is_connect_key=True)
 }
 
 

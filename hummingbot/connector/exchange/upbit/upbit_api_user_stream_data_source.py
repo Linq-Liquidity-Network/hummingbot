@@ -19,9 +19,9 @@ from hummingbot.connector.exchange.upbit.upbit_api_order_book_data_source import
 from hummingbot.connector.exchange.upbit.upbit_order_book import UpbitOrderBook
 from hummingbot.connector.exchange.upbit.upbit_utils import get_ws_api_key
 
-UPBIT_WS_URL = "wss://ws.upbit.io/v2/ws"
+UPBIT_WS_URL = "wss://api.upbit.com/websocket/v1"
 
-UPBIT_ROOT_API = "https://api.upbit.io"
+UPBIT_ROOT_API = "https://api.upbit.com/v1"
 
 
 class UpbitAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -52,29 +52,26 @@ class UpbitAPIUserStreamDataSource(UserStreamTrackerDataSource):
     async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
-                ws_key: str = await get_ws_api_key()
-                async with websockets.connect(f"{UPBIT_WS_URL}?wsApiKey={ws_key}") as ws:
+                async with websockets.connect(f"{UPBIT_WS_URL}") as ws:
                     ws: websockets.WebSocketClientProtocol = ws
 
-                    topics = [{"topic": "order", "market": m} for m in self._orderbook_tracker_data_source.trading_pairs]
-                    topics.append({
-                        "topic": "account"
-                    })
+                    subscribe_request: List[Dict[str, Any]] = [
+                        {"ticket": "ram macbook"},
+                        {"format": "SIMPLE"},
+                        {
+                            "type": "order",
+                            "codes": ["ALL"],
+                            "accessKey": self._upbit_auth.api_key
+                        }
+                    ]
 
-                    subscribe_request: Dict[str, Any] = {
-                        "op": "sub",
-                        "apiKey": self._upbit_auth.generate_auth_dict()["X-API-KEY"],
-                        "unsubscribeAll": True,
-                        "topics": topics
-                    }
                     await ws.send(ujson.dumps(subscribe_request))
 
                     async for raw_msg in self._inner_messages(ws):
                         self._last_recv_time = time.time()
 
                         diff_msg = ujson.loads(raw_msg)
-                        if 'op' in diff_msg:
-                            continue  # These messages are for control of the stream, so skip sending them to the market class
+                        print(diff_msg)
                         output.put_nowait(diff_msg)
             except asyncio.CancelledError:
                 raise

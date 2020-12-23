@@ -53,7 +53,7 @@ class UpbitOrderBookTracker(OrderBookTracker):
         self._order_book_diff_stream: asyncio.Queue = asyncio.Queue()
         self._order_book_trade_stream: asyncio.Queue = asyncio.Queue()
         self._ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
-        self._upbit_auth = UpbitAuth(upbit_auth)
+        self._upbit_auth = upbit_auth
 
     @property
     def exchange_name(self) -> str:

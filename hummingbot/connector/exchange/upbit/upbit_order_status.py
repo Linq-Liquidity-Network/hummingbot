@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class UpbitOrderStatus(Enum):
+    #TODO NOT TOUCHED YET
     waiting = 0
     ACTIVE = 100
     processing = 101

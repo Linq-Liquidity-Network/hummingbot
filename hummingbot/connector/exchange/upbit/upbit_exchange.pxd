@@ -14,6 +14,7 @@ cdef class UpbitExchange(ExchangeBase):
         int _upbit_accountid
         int _upbit_exchangeid
         str _upbit_private_key
+        str _upbit_api_key
         object _order_sign_param
 
         object _user_stream_tracker

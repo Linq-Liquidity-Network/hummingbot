@@ -28,6 +28,7 @@ from hummingbot.connector.exchange.upbit.upbit_auth import UpbitAuth
 from hummingbot.connector.exchange.upbit.upbit_order_book_tracker import UpbitOrderBookTracker
 from hummingbot.connector.exchange.upbit.upbit_api_order_book_data_source import UpbitAPIOrderBookDataSource
 from hummingbot.connector.exchange.upbit.upbit_user_stream_tracker import UpbitUserStreamTracker
+from hummingbot.connector.exchange.upbit.upbit_utils import convert_from_exchange_trading_pair, convert_to_exchange_trading_pair
 from hummingbot.core.utils.async_utils import (
     safe_ensure_future,
 )
@@ -76,17 +77,15 @@ API_CALL_TIMEOUT = 10.0
 
 # ==========================================================
 
-GET_ORDER_ROUTE = "/api/v2/order"
-MAINNET_API_REST_ENDPOINT = "https://api.upbit.io/"
+GET_ORDER_ROUTE = "/order"
+MAINNET_API_REST_ENDPOINT = "https://sg-api.upbit.com/v1"
 MAINNET_WS_ENDPOINT = "wss://ws.upbit.io/v2/ws"
-EXCHANGE_INFO_ROUTE = "api/v2/timestamp"
-BALANCES_INFO_ROUTE = "api/v2/user/balances"
-ACCOUNT_INFO_ROUTE = "api/v2/account"
-MARKETS_INFO_ROUTE = "api/v2/exchange/markets"
-TOKENS_INFO_ROUTE = "api/v2/exchange/tokens"
-NEXT_ORDER_ID = "api/v2/orderId"
-ORDER_ROUTE = "api/v3/order"
-ORDER_CANCEL_ROUTE = "api/v2/orders"
+EXCHANGE_INFO_ROUTE = "/candles/months?market=BTC-XRP"
+BALANCES_INFO_ROUTE = "/accounts"
+ACCOUNT_INFO_ROUTE = "/accounts"
+MARKETS_INFO_ROUTE = "/members/me/order_chance?market=:trading_pair" #TODO FIND THE RIGHT PLACE FOR THE TRADING RULES
+ORDER_ROUTE = "/order"
+ORDER_CANCEL_ROUTE = "/order"
 MAXIMUM_FILL_COUNT = 16
 UNRECOGNIZED_ORDER_DEBOUCE = 20  # seconds
 
@@ -139,19 +138,17 @@ cdef class UpbitExchange(ExchangeBase):
         return s_logger
 
     def __init__(self,
-                 upbit_accountid: int,
-                 upbit_exchangeid: int,
-                 upbit_private_key: str,
                  upbit_api_key: str,
+                 upbit_private_key: str,
                  poll_interval: float = 10.0,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
 
         super().__init__()
 
-        self._real_time_balance_update = True
+        self._real_time_balance_update = False
 
-        self._upbit_auth = UpbitAuth(upbit_api_key)
+        self._upbit_auth = UpbitAuth(upbit_api_key, upbit_private_key)
 
         self.API_REST_ENDPOINT = MAINNET_API_REST_ENDPOINT
         self.WS_ENDPOINT = MAINNET_WS_ENDPOINT
@@ -174,14 +171,11 @@ cdef class UpbitExchange(ExchangeBase):
         self._shared_client = None
         self._polling_update_task = None
 
-        self._upbit_accountid = int(upbit_accountid)
-        self._upbit_exchangeid = int(upbit_exchangeid)
         self._upbit_private_key = upbit_private_key
-
+        self._upbit_api_key = upbit_api_key
         # State
         self._lock = asyncio.Lock()
         self._trading_rules = {}
-        self._pending_approval_tx_hashes = set()
         self._in_flight_orders = {}
         self._next_order_id = {}
         self._trading_pairs = trading_pairs
@@ -249,42 +243,8 @@ cdef class UpbitExchange(ExchangeBase):
     def in_flight_orders(self) -> Dict[str, UpbitInFlightOrder]:
         return self._in_flight_orders
 
-    async def _get_next_order_id(self, token, force_sync = False):
-        async with self._order_id_lock:
-            next_id = self._next_order_id
-            if force_sync or self._next_order_id.get(token) is None:
-                try:
-                    response = await self.api_request("GET", NEXT_ORDER_ID, params={"accountId": self._upbit_accountid, "tokenSId": token})
-                    next_id = response["data"]
-                    self._next_order_id[token] = next_id
-                except Exception as e:
-                    self.logger().info(str(e))
-                    self.logger().info("Error getting the next order id from upbit")
-            else:
-                next_id = self._next_order_id[token]
-                self._next_order_id[token] = next_id + 1
-
-        return next_id
-
-    async def _serialize_order(self, order):
-        return [
-            int(order["exchangeId"]),
-            int(order["orderId"]),
-            int(order["accountId"]),
-            int(order["tokenSId"]),
-            int(order["tokenBId"]),
-            int(order["amountS"]),
-            int(order["amountB"]),
-            int(order["allOrNone"] == 'true'),
-            int(order["validSince"]),
-            int(order["validUntil"]),
-            int(order["maxFeeBips"]),
-            int(order["buy"] == 'true'),
-            int(order["label"])
-        ]
-
     def supported_order_types(self):
-        return [OrderType.LIMIT, OrderType.LIMIT_MAKER]
+        return [OrderType.LIMIT]
 
     async def place_order(self,
                           client_order_id: str,
@@ -293,26 +253,16 @@ cdef class UpbitExchange(ExchangeBase):
                           is_buy: bool,
                           order_type: OrderType,
                           price: Decimal) -> Dict[str, Any]:
-        order_side = TradeType.BUY if is_buy else TradeType.SELL
-        base, quote = trading_pair.split('-')
+        order_side = 'bid' if is_buy else 'ask'
+        market = convert_to_exchange_trading_pair(trading_pair)
 
-        validSince = int(time.time()) - 3600
-
-        order_id = await self._get_next_order_id(token_s_id)
         order = {
-            "exchangeId": self._upbit_exchangeid,
-            "orderId": order_id,
-            "accountId": self._upbit_accountid,
-            "allOrNone": "false",
-            "validSince": validSince,
-            "validUntil": validSince + (604800 * 5),  # Until week later
-            "maxFeeBips": 63,
-            "label": 20,
-            "buy": "true" if order_side is TradeType.BUY else "false",
-            "clientOrderId": client_order_id,
+            'market': market,
+            'side': order_side,
+            'volume': amount,
+            'price': price,
+            'ord_type': 'limit',
         }
-        if order_type is OrderType.LIMIT_MAKER:
-            order["orderType"] = "MAKER_ONLY"
 
         return await self.api_request("POST", ORDER_ROUTE, params=order, data=order)
 
@@ -353,15 +303,15 @@ cdef class UpbitExchange(ExchangeBase):
                 return True
 
             # Verify the response from the exchange
-            if "data" not in creation_response.keys():
-                raise Exception(creation_response['resultInfo']['message'])
+            if "uuid" not in creation_response.keys():
+                raise Exception(creation_response['error']['error_message'])
 
-            status = creation_response["data"]["status"]
+            status = creation_response["state"]
             if status != 'NEW_ACTIVED':
                 raise Exception(status)
 
-            upbit_order_hash = creation_response["data"]["orderHash"]
-            in_flight_order.update_exchange_order_id(upbit_order_hash)
+            upbit_order_id= creation_response["uuid"]
+            in_flight_order.update_exchange_order_id(upbit_order_id)
 
             # Begin tracking order
             self.logger().info(
@@ -432,20 +382,19 @@ cdef class UpbitExchange(ExchangeBase):
 
         try:
             cancellation_payload = {
-                "accountId": self._upbit_accountid,
-                "clientOrderId": client_order_id
+                'uuid': in_flight.exchange_order_id
             }
 
-            res = await self.api_request("DELETE", ORDER_CANCEL_ROUTE, params=cancellation_payload, secure=True)
-            code = res['resultInfo']['code']
-            message = res['resultInfo']['message']
-            if code == 102117 and in_flight_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
-                # Order doesn't exist and enough time has passed so we are safe to mark this as canceled
-                self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
-                self.c_stop_tracking_order(client_order_id)
-            elif code != 0 and (code != 100001 or message != "order in status CANCELLED can't be cancelled"):
-                raise Exception(f"Cancel order returned code {res['resultInfo']['code']} ({res['resultInfo']['message']})")
+            res = await self.api_request("DELETE", ORDER_CANCEL_ROUTE, data=cancellation_payload, secure=True)
 
+            if "error" in res:
+                self.logger().warning(f"{res['error']['message']}")
+
+            #if code == 102117 and in_flight_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
+            #    # Order doesn't exist and enough time has passed so we are safe to mark this as canceled
+            #    self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
+            #    self.c_stop_tracking_order(client_order_id)
+            
             return True
 
         except Exception as e:
@@ -508,24 +457,12 @@ cdef class UpbitExchange(ExchangeBase):
     async def start_network(self):
         await self.stop_network()
         self._order_book_tracker.start()
-
-        if self._trading_required:
-            exchange_info = await self.api_request("GET", EXCHANGE_INFO_ROUTE)
-
-            tokens = set()
-            for pair in self._trading_pairs:
-                (base, quote) = self.split_trading_pair(pair)
-
-            for token in tokens:
-                await self._get_next_order_id(token, force_sync = True)
-
         self._polling_update_task = safe_ensure_future(self._polling_update())
         self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
         self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
 
     async def stop_network(self):
         self._order_book_tracker.stop()
-        self._pending_approval_tx_hashes.clear()
         self._polling_update_task = None
         if self._user_stream_tracker_task is not None:
             self._user_stream_tracker_task.cancel()
@@ -645,21 +582,13 @@ cdef class UpbitExchange(ExchangeBase):
     async def _set_balances(self, updates, is_snapshot=True):
         try:
             async with self._lock:
-                completed_tokens = set()
                 for data in updates:
-                    total_amount: str = data['totalAmount']
-                    token_symbol: int = data['tokenId']
-                    completed_tokens.add(token_id)
-                    amount_locked: string = data['amountLocked']
+                    total_amount: Decimal = Decimal(data['balance'])
+                    token_symbol: str = data['currency']
+                    amount_locked: Decimal = Decimal(data['locked'])
 
                     self._account_balances[token_symbol] = total_amount
                     self._account_available_balances[token_symbol] = total_amount - amount_locked
-
-                if is_snapshot:
-                    # Tokens with 0 balance aren't returned, so set any missing tokens to 0 balance
-                    for token_symbol in tokens - completed_tokens:
-                        self._account_balances[token_symbol] = Decimal(0)
-                        self._account_available_balances[token_symbol] = Decimal(0)
 
         except Exception as e:
             self.logger().error(f"Could not set balance {repr(e)}")
@@ -683,6 +612,7 @@ cdef class UpbitExchange(ExchangeBase):
 
     async def _user_stream_event_listener(self):
         async for event_message in self._iter_user_event_queue():
+            #TODO NEEDS EDITING! NO USER STREAM MESSAGES COMING THROUGH YET
             try:
                 event: Dict[str, Any] = event_message
                 topic: str = event['topic']['topic']
@@ -734,37 +664,26 @@ cdef class UpbitExchange(ExchangeBase):
                 self.logger().info(e)
 
     async def _update_balances(self):
-        balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE,
-                                                   params = {
-                                                       "accountId": self._upbit_accountid
-                                                   })
-        await self._set_balances(balances_response["data"])
+        balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE)
+        await self._set_balances(balances_response)
 
     async def _update_trading_rules(self):
-        markets_info, tokens_info = await asyncio.gather(
-            self.api_request("GET", MARKETS_INFO_ROUTE),
-            self.api_request("GET", TOKENS_INFO_ROUTE)
-        )
+        markets_info = {}
+        for pair in self._trading_pairs:
+            trading_pair = convert_to_exchange_trading_pair(pair)
+            markets_info[trading_pair] = await self.api_request("GET", f"{MARKETS_INFO_ROUTE}".replace(":trading_pair", trading_pair))
 
-        # upbit fees not available from api
-
-        markets_info = markets_info["data"]
-        tokens_info = tokens_info["data"]
-        tokens_info = {t['tokenId']: t for t in tokens_info}
-
-        for market in markets_info:
-            if market['enabled'] is True:
-                baseid, quoteid = market['baseTokenId'], market['quoteTokenId']
-
+        for market in markets_info.values():
+            if market['market']['state'] == "active":
                 try:
-                    self._trading_rules[market["market"]] = TradingRule(
-                        trading_pair=market["market"],
-                        min_order_size = tokens_info[baseid]['minOrderAmount'],
-                        max_order_size = tokens_info[baseid]['maxOrderAmount'],
-                        min_price_increment=Decimal(f"1e-{market['precisionForPrice']}"),
-                        min_base_amount_increment=Decimal(f"1e-{tokens_info[baseid]['precision']}"),
-                        min_quote_amount_increment=Decimal(f"1e-{tokens_info[quoteid]['precision']}"),
-                        min_notional_size = tokens_info[quoteid]['minOrderAmount'],
+                    self._trading_rules[convert_from_exchange_trading_pair(market["market"]["id"])] = TradingRule(
+                        trading_pair=convert_from_exchange_trading_pair(market["market"]["id"]),
+                        min_order_size = market['market']['ask']['min_total'],
+                        max_order_size = market['market']['max_total'],
+                        min_price_increment= market['market']['bid']['price_unit'],
+                        min_base_amount_increment= market['market']['ask']['price_unit'],
+                        min_quote_amount_increment= market['market']['bid']['price_unit'],
+                        min_notional_size = market['market']['bid']['min_total'],
                         supports_limit_orders = True,
                         supports_market_orders = False
                     )
@@ -791,18 +710,14 @@ cdef class UpbitExchange(ExchangeBase):
             try:
                 upbit_order_request = await self.api_request("GET",
                                                                 GET_ORDER_ROUTE,
-                                                                params={
-                                                                    "accountId": self._upbit_accountid,
-                                                                    "orderHash": tracked_order.exchange_order_id
-                                                                })
-                data = upbit_order_request["data"]
+                                                                data = {'uuid': upbit_order_id})
             except Exception:
                 self.logger().warning(f"Failed to fetch tracked upbit order "
                                       f"{client_order_id }({tracked_order.exchange_order_id}) from api (code: {upbit_order_request['resultInfo']['code']})")
 
                 # check if this error is because the api cliams to be unaware of this order. If so, and this order
                 # is reasonably old, mark the order as cancelled
-                if upbit_order_request['resultInfo']['code'] == 107003:
+                if "error" in upbit_order_request:
                     if tracked_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
                         self.logger().warning(f"marking {client_order_id} as cancelled")
                         cancellation_event = OrderCancelledEvent(now(), client_order_id)
@@ -811,7 +726,7 @@ cdef class UpbitExchange(ExchangeBase):
                 continue
 
             try:
-                self._update_inflight_order(tracked_order, data)
+                self._update_inflight_order(tracked_order, upbit_order_request)
             except Exception as e:
                 self.logger().error(f"Failed to update upbit order {tracked_order.exchange_order_id}")
                 self.logger().error(e)
@@ -853,11 +768,6 @@ cdef class UpbitExchange(ExchangeBase):
                 self._poll_notifier.set()
         self._last_timestamp = timestamp
 
-    def _encode_request(self, url, method, params):
-        url = urllib.parse.quote(url, safe='')
-        data = urllib.parse.quote("&".join([f"{k}={str(v)}" for k, v in params.items()]), safe='')
-        return "&".join([method, url, data])
-
     async def api_request(self,
                           http_method: str,
                           url: str,
@@ -869,14 +779,13 @@ cdef class UpbitExchange(ExchangeBase):
         if self._shared_client is None:
             self._shared_client = aiohttp.ClientSession()
 
-        if data is not None and http_method == "POST":
-            data = json.dumps(data).encode('utf8')
-            headers = {"Content-Type": "application/json"}
-
-        headers.update(self._upbit_auth.generate_auth_dict())
+        payload, token = self._upbit_auth.sign_request(data)
+        headers = {"Authorization": token}
         full_url = f"{self.API_REST_ENDPOINT}{url}"
 
-        # Signs requests for secure requests
+        if not (http_method == 'POST'):
+            params = data
+            data = None
 
         async with self._shared_client.request(http_method, url=full_url,
                                                timeout=API_CALL_TIMEOUT,
