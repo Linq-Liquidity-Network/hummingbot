@@ -95,6 +95,7 @@ dependencies:
     - filelock==3.0.12
     - flake8==3.7.9
     - future==0.18.2
+    - guppy3==3.1.0
     - hexbytes==0.2.0
     - hyperlink==19.0.0
     - identify==1.4.11
