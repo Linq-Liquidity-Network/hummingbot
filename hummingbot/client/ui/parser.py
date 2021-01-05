@@ -115,7 +115,7 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     ticker_parser.add_argument("--exchange", type=str, dest="exchange", help="The exchange of the market")
     ticker_parser.add_argument("--market", type=str, dest="market", help="The market (trading pair) of the order book")
     ticker_parser.set_defaults(func=hummingbot.ticker)
-    
+
     trade_parser = subparsers.add_parser("trade", help="Perform manual trade")
     trade_parser.add_argument("buy_sell", nargs=1, choices=("buy", "sell"))
     trade_parser.add_argument("amount", nargs=1, type=Decimal)
@@ -127,6 +127,9 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
 
     offset_amount_parser = subparsers.add_parser("zero_out_offset_amount", help="Sets the amount to offset on the LM strat")
     offset_amount_parser.set_defaults(func=hummingbot.zero_out_offset_amount)
+
+    heap_parser = subparsers.add_parser("show_heap", help="Shows the current heap for debugging memory issues")
+    heap_parser.set_defaults(func=hummingbot.show_heap)
 
     depth_parser = subparsers.add_parser("depth", help="Display the depth of the specified exchange up to the specified level")
     depth_parser.add_argument("exchange", nargs=1, type=str)

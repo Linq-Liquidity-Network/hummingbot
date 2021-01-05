@@ -66,7 +66,7 @@ global:
   # in secrets.prod.yaml.  These values will be passed into the container in an env variable, from which
   # the init.sh will create the necessary key files.
   # THIS IS THE MOST SENSITIVE credentials IN OUR STACK!
-  accounts2:
+  accounts:
     bolsacripto-prod1:
       description: "trading@linq.network"
       credentials: placeholder
@@ -153,13 +153,13 @@ global:
     #  accounts:
     #    - bolsacripto-dev1
     #    - novadax-dev1
-    test-binance:
-      accounts:
-        - binance-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: true
-        strategyFileName: "conf_pure_mm_1.yml"    
+    #pm-binance-test:
+    #  accounts:
+    #    - binance-dev1
+    #  strategy: pure_market_making
+    #  options:
+    #    paperTrade: true
+    #    strategyFileName: "conf_pure_mm_1"    
     #test-loopring-2:
     #  accounts:
     #    - loopring-dev1
@@ -168,3 +168,27 @@ global:
     #  options:
     #    paperTrade: true
     #    strategyFileName: pure_market_making_loopring_btc_usdt.yml
+    lm-bitbay-binance-eth-usdt:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_usdt" 
+    lm-bitbay-binance-eth-btc:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_btc"          
+    lm-bitbay-binance-btc-usdt:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt"         
