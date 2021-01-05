@@ -18,6 +18,7 @@ from .ticker_command import TickerCommand
 from .generate_certs_command import GenerateCertsCommand
 from .manual_trade_command import ManualTradeCommand
 from .offset_command import OffsetCommand
+from .heap import HeapCommand
 from .depth_command import DepthCommand
 from .open_orders_command import OpenOrdersCommand
 from .cancel_command import CancelCommand
@@ -44,6 +45,7 @@ __all__ = [
     GenerateCertsCommand,
     ManualTradeCommand,
     OffsetCommand,
+    HeapCommand,
     DepthCommand,
     OpenOrdersCommand,
     CancelCommand

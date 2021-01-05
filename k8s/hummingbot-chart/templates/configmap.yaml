@@ -36,18 +36,31 @@ data:
     tmux send-keys -t sync_strategies:hbstrat "mkdir -p ~/.ssh; cp ${GIT_HOST_KEY_FILE} /home/hummingbot/.ssh/known_hosts" Enter
     tmux send-keys -t sync_strategies:hbstrat 'ssh-add - <<< "${SYNCBOT_SSH_KEY}"' Enter
     tmux send-keys -t sync_strategies:hbstrat "python3 sync_strategies.py & echo \$!  > $PIDFILE" Enter
+    sleep 2
     export SYNC_STRATEGIES_PID=$(cat $PIDFILE)
-
+    sleep 2
     tmux new-session -d -s hummingbot -n hbstrat
     tmux send-keys -t hummingbot:hbstrat "export PIDFILE=$PIDFILE" Enter
     tmux send-keys -t hummingbot:hbstrat "export SYNC_STRATEGIES_PID=\$(cat \$PIDFILE)" Enter
     tmux send-keys -t hummingbot:hbstrat "python3 /home/hummingbot/initialize_key_files.py" Enter
     sleep 2
+    tmux send-keys -t hummingbot:hbstrat "mkdir -p /home/hummingbot/logs/logs_strategies" Enter
     tmux send-keys -t hummingbot:hbstrat "python3 bin/hummingbot_quickstart.py" Enter
     sleep 2
-    tmux send-keys -t hummingbot:hbstrat "import strategies/${STRATEGY_FILE_NAME}" Enter
+    tmux send-keys -t hummingbot:hbstrat "import strategies/${STRATEGY_FILE_NAME}.yml" Enter
+    sleep 10
+    tmux send-keys -t hummingbot:hbstrat Enter
+    sleep 10
+    tmux send-keys -t hummingbot:hbstrat Enter
 
-    tail -F /logs/logs_hummingbot.log & tail -f /dev/null
+    tail -F /home/hummingbot/logs/logs_strategies/${STRATEGY_FILE_NAME}.log & tail -f /dev/null
+
+
+  quit.sh: |
+    tmux send-keys -t hummingbot:hbstrat "stop" Enter
+    sleep 15
+    tmux send-keys -t hummingbot:hbstrat "stop" Enter
+    sleep 30
 
 
   conf_global.yml: |
