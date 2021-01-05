@@ -3,15 +3,12 @@ from enum import Enum
 
 class UpbitOrderStatus(Enum):
     #TODO NOT TOUCHED YET
-    waiting = 0
     ACTIVE = 100
-    processing = 101
-    cancelling = 200
+    wait = 101
+    cancel = 200
     DONE = 300
-    processed = 301
-    failed = 400
-    cancelled = 402
-    expired = 403
+    done = 301
+    FAIL = 500
 
     def __ge__(self, other):
         if self.__class__ is other.__class__:

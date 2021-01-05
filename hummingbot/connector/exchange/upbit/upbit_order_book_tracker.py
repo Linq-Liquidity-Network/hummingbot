@@ -77,7 +77,7 @@ class UpbitOrderBookTracker(OrderBookTracker):
                     bids = [ClientOrderBookRow(bid["price"],bid["amount"],message.update_id) for bid in message.bids]
                     asks = [ClientOrderBookRow(ask["price"],ask["amount"],message.update_id) for ask in message.asks]
 
-                    order_book.apply_diffs(bids, asks, message.timestamp)
+                    order_book.apply_snapshot(bids, asks, message.timestamp)
 
                 elif message.type is OrderBookMessageType.SNAPSHOT:
                     bids = [ClientOrderBookRow(bid["price"],bid["amount"],message.update_id) for bid in message.bids]

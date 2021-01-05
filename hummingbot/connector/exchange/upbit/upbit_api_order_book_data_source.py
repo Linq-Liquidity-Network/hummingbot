@@ -37,8 +37,8 @@ MARKETS_URL = "/market/all"
 TICKER_URL = "/ticker?markets=:markets"
 SNAPSHOT_URL = "/orderbook?markets=:trading_pair"
 TOKEN_INFO_URL = "/api/v2/exchange/tokens"
-WS_URL = "wss://api.upbit.com/websocket/v1"
-REST_URL =  "https://api.upbit.com/v1"
+WS_URL = "wss://sg-api.upbit.com/websocket/v1"
+REST_URL =  "https://sg-api.upbit.com/v1"
 UPBIT_PRICE_URL = TICKER_URL
 
 
@@ -68,7 +68,7 @@ class UpbitAPIOrderBookDataSource(OrderBookTrackerDataSource):
         async with aiohttp.ClientSession() as client:
             resp = await client.get(f"{REST_URL}{TICKER_URL}".replace(":markets", ",".join(pairs)))
             resp_json = await resp.json()
-            return {x["market"]: float(x["trade_price"]) for x in resp_json}
+            return {convert_from_exchange_trading_pair(x["market"]): float(x["trade_price"]) for x in resp_json}
 
     @property
     def order_book_class(self) -> UpbitOrderBook:
@@ -162,7 +162,7 @@ class UpbitAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def listen_for_trades(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
-                codes: List[str] = [f"{pair}" for pair in self._trading_pairs]
+                codes: List[str] = [convert_to_exchange_trading_pair(pair) for pair in self._trading_pairs]
                 subscribe_request: List[Dict[str, Any]] = [
                     {"ticket": "ram macbook"},
                     {"format": "SIMPLE"},
@@ -193,7 +193,7 @@ class UpbitAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
-                codes: List[str] = [f"{pair}" for pair in self._trading_pairs]
+                codes: List[str] = [convert_to_exchange_trading_pair(pair) for pair in self._trading_pairs]
                 subscribe_request: List[Dict[str, Any]] = [
                     {"ticket": "ram macbook"},
                     {"format": "SIMPLE"},

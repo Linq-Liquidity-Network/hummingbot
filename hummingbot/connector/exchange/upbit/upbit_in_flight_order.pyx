@@ -48,15 +48,11 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
 
     @property
     def is_cancelled(self) -> bool:
-        return self.status == UpbitOrderStatus.cancelled
+        return self.status == UpbitOrderStatus.cancel
 
     @property
     def is_failure(self) -> bool:
-        return self.status >= UpbitOrderStatus.failed
-
-    @property
-    def is_expired(self) -> bool:
-        return self.status == UpbitOrderStatus.expired
+        return self.status >= UpbitOrderStatus.FAIL
 
     @property
     def description(self):
@@ -115,7 +111,7 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
             side,
             Decimal(price),
             Decimal(amount),
-            UpbitOrderStatus.waiting,
+            UpbitOrderStatus.wait,
             Decimal(0),
             Decimal(0),
             Decimal(0),
@@ -124,19 +120,13 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
 
     def update(self, data: Dict[str, Any]) -> List[Any]:
         events: List[Any] = []
-        #TODO THIS HAS NOT BEEN TOUCHED YET
-        base: str
-        quote: str
-        trading_pair: str = data["market"]
-        (base, quote) = self.market.split_trading_pair(trading_pair)
-        base_id: int = self.market.token_configuration.get_tokenid(base)
-        quote_id: int = self.market.token_configuration.get_tokenid(quote)
-        fee_currency_id: int = self.market.token_configuration.get_tokenid(self.fee_asset)
+        
+        trading_pair: str = data["trading_pair"]
 
-        new_status: UpbitOrderStatus = UpbitOrderStatus[data["status"]]
-        new_executed_amount_base: Decimal = self.market.token_configuration.unpad(data["filledSize"], base_id)
-        new_executed_amount_quote: Decimal = self.market.token_configuration.unpad(data["filledVolume"], quote_id)
-        new_fee_paid: Decimal = self.market.token_configuration.unpad(data["filledFee"], fee_currency_id)
+        new_status: UpbitOrderStatus = UpbitOrderStatus[data["state"]]
+        new_executed_amount_base: Decimal = Decimal(data["executed_volume"])
+        new_executed_amount_quote: Decimal = Decimal(data['price']) * new_executed_amount_base
+        new_fee_paid: Decimal = Decimal(data["paid_fee"])
 
         if new_executed_amount_base > self.executed_amount_base or new_executed_amount_quote > self.executed_amount_quote:
             diff_base: Decimal = new_executed_amount_base - self.executed_amount_base
@@ -149,13 +139,13 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
 
             events.append((MarketEvent.OrderFilled, diff_base, price, diff_fee))
 
-        if not self.is_done and new_status == UpbitOrderStatus.cancelled:
+        if not self.is_done and new_status == UpbitOrderStatus.cancel:
             events.append((MarketEvent.OrderCancelled, None, None, None))
 
-        if not self.is_done and new_status == UpbitOrderStatus.expired:
-            events.append((MarketEvent.OrderExpired, None, None, None))
+        #if not self.is_done and new_status == UpbitOrderStatus.expired:
+        #    events.append((MarketEvent.OrderExpired, None, None, None))
 
-        if not self.is_done and new_status == UpbitOrderStatus.failed:
+        if not self.is_done and new_status == UpbitOrderStatus.FAIL:
             events.append((MarketEvent.OrderFailure, None, None, None))
 
         self.status = new_status
@@ -165,6 +155,6 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
         self.fee_paid = new_fee_paid
 
         if self.exchange_order_id is None:
-            self.update_exchange_order_id(data.get('hash', None))
+            self.update_exchange_order_id(data.get('uuid', None))
 
         return events

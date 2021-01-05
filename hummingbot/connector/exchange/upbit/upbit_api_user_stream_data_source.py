@@ -19,9 +19,9 @@ from hummingbot.connector.exchange.upbit.upbit_api_order_book_data_source import
 from hummingbot.connector.exchange.upbit.upbit_order_book import UpbitOrderBook
 from hummingbot.connector.exchange.upbit.upbit_utils import get_ws_api_key
 
-UPBIT_WS_URL = "wss://api.upbit.com/websocket/v1"
+UPBIT_WS_URL = "wss://sg-api.upbit.com/websocket/v1"
 
-UPBIT_ROOT_API = "https://api.upbit.com/v1"
+UPBIT_ROOT_API = "https://sg-api.upbit.com/v1"
 
 
 class UpbitAPIUserStreamDataSource(UserStreamTrackerDataSource):
@@ -91,6 +91,7 @@ class UpbitAPIUserStreamDataSource(UserStreamTrackerDataSource):
         try:
             while True:
                 msg: str = await asyncio.wait_for(ws.recv(), timeout=None)    # This will throw the ConnectionClosed exception on disconnect
+
                 if msg == "ping":
                     await ws.send("pong")  # skip returning this and handle this protocol level message here
                 else:

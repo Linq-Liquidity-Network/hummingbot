@@ -83,8 +83,8 @@ MAINNET_WS_ENDPOINT = "wss://ws.upbit.io/v2/ws"
 EXCHANGE_INFO_ROUTE = "/candles/months?market=BTC-XRP"
 BALANCES_INFO_ROUTE = "/accounts"
 ACCOUNT_INFO_ROUTE = "/accounts"
-MARKETS_INFO_ROUTE = "/members/me/order_chance?market=:trading_pair" #TODO FIND THE RIGHT PLACE FOR THE TRADING RULES
-ORDER_ROUTE = "/order"
+MARKETS_INFO_ROUTE = "/orders/chance"
+ORDER_ROUTE = "/orders"
 ORDER_CANCEL_ROUTE = "/order"
 MAXIMUM_FILL_COUNT = 16
 UNRECOGNIZED_ORDER_DEBOUCE = 20  # seconds
@@ -140,7 +140,7 @@ cdef class UpbitExchange(ExchangeBase):
     def __init__(self,
                  upbit_api_key: str,
                  upbit_private_key: str,
-                 poll_interval: float = 10.0,
+                 poll_interval: float = 0.1,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True):
 
@@ -230,10 +230,16 @@ cdef class UpbitExchange(ExchangeBase):
     # Account Balances
 
     cdef object c_get_balance(self, str currency):
-        return self._account_balances[currency]
+        if currency in self._account_balances:
+            return self._account_balances[currency]
+        else:
+            return Decimal('0')
 
     cdef object c_get_available_balance(self, str currency):
-        return self._account_available_balances[currency]
+        if currency in self._account_available_balances:
+            return self._account_available_balances[currency]
+        else:
+            return Decimal('0')
 
     # ==========================================================
     # Order Submission
@@ -255,16 +261,16 @@ cdef class UpbitExchange(ExchangeBase):
                           price: Decimal) -> Dict[str, Any]:
         order_side = 'bid' if is_buy else 'ask'
         market = convert_to_exchange_trading_pair(trading_pair)
-
         order = {
             'market': market,
             'side': order_side,
-            'volume': amount,
-            'price': price,
+            'volume': str(amount),
+            'price': str(price),
             'ord_type': 'limit',
         }
 
         return await self.api_request("POST", ORDER_ROUTE, params=order, data=order)
+
 
     async def execute_order(self, order_side, client_order_id, trading_pair, amount, order_type, price):
         """
@@ -292,27 +298,29 @@ cdef class UpbitExchange(ExchangeBase):
         try:
             created_at: int = int(time.time())
             in_flight_order = UpbitInFlightOrder.from_upbit_order(self, order_side, client_order_id, created_at, None, trading_pair, price, amount)
+
             self.start_tracking(in_flight_order)
 
             try:
                 creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
-            except asyncio.exceptions.TimeoutError:
-                # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
-                # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status
-                # updates mark this as cancelled if it doesn't actually exist.
+            except Exception as e:
+                self.logger().info(e)
                 return True
 
             # Verify the response from the exchange
             if "uuid" not in creation_response.keys():
                 raise Exception(creation_response['error']['error_message'])
 
-            status = creation_response["state"]
-            if status != 'NEW_ACTIVED':
-                raise Exception(status)
+            #status = creation_response["state"]
+            #if status != 'wait':
+            #    raise Exception(status)
 
             upbit_order_id= creation_response["uuid"]
             in_flight_order.update_exchange_order_id(upbit_order_id)
 
+            if "executed_volume" in creation_response:
+                if Decimal(creation_response["executed_volume"]) > Decimal('0'):
+                    self._update_inflight_order(in_flight_order, creation_response)
             # Begin tracking order
             self.logger().info(
                 f"Created {in_flight_order.description} order {client_order_id} for {amount} {trading_pair}.")
@@ -324,12 +332,9 @@ cdef class UpbitExchange(ExchangeBase):
                                   f"{amount} {trading_pair} at {price}.")
             self.logger().info(e)
 
-            # Re-sync our next order id after this failure
-            base, quote = trading_pair.split('-')
-
             # Stop tracking this order
-            self.stop_tracking(client_order_id)
-            self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
+            #self.stop_tracking(client_order_id)
+            #self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
 
             return False
 
@@ -382,7 +387,7 @@ cdef class UpbitExchange(ExchangeBase):
 
         try:
             cancellation_payload = {
-                'uuid': in_flight.exchange_order_id
+                'uuid': in_flight_order.exchange_order_id
             }
 
             res = await self.api_request("DELETE", ORDER_CANCEL_ROUTE, data=cancellation_payload, secure=True)
@@ -506,6 +511,7 @@ cdef class UpbitExchange(ExchangeBase):
     # updates to orders and balances
 
     def _update_inflight_order(self, tracked_order: UpbitInFlightOrder, event: Dict[str, Any]):
+        event['trading_pair'] = convert_from_exchange_trading_pair(event['market'])
         issuable_events: List[MarketEvent] = tracked_order.update(event)
 
         # Issue relevent events
@@ -670,26 +676,29 @@ cdef class UpbitExchange(ExchangeBase):
     async def _update_trading_rules(self):
         markets_info = {}
         for pair in self._trading_pairs:
-            trading_pair = convert_to_exchange_trading_pair(pair)
-            markets_info[trading_pair] = await self.api_request("GET", f"{MARKETS_INFO_ROUTE}".replace(":trading_pair", trading_pair))
+            ex_tr_pair = convert_to_exchange_trading_pair(pair)
+            query = {
+                'market': ex_tr_pair,
+            }
+            markets_info[pair] = await self.api_request("GET", f"{MARKETS_INFO_ROUTE}", data=query)
 
-        for market in markets_info.values():
-            if market['market']['state'] == "active":
-                try:
-                    self._trading_rules[convert_from_exchange_trading_pair(market["market"]["id"])] = TradingRule(
-                        trading_pair=convert_from_exchange_trading_pair(market["market"]["id"]),
-                        min_order_size = market['market']['ask']['min_total'],
-                        max_order_size = market['market']['max_total'],
-                        min_price_increment= market['market']['bid']['price_unit'],
-                        min_base_amount_increment= market['market']['ask']['price_unit'],
-                        min_quote_amount_increment= market['market']['bid']['price_unit'],
-                        min_notional_size = market['market']['bid']['min_total'],
-                        supports_limit_orders = True,
-                        supports_market_orders = False
-                    )
-                except Exception as e:
-                    self.logger().debug("Error updating trading rules")
-                    self.logger().debug(str(e))
+        for market in markets_info.keys():
+            market_info = markets_info[market]
+            try:
+                self._trading_rules[market] = TradingRule(
+                    trading_pair=market,
+                    min_order_size = Decimal(str(market_info['market']['ask']['min_total'])),
+                    max_order_size = Decimal(str(market_info['market']['max_total'])),
+                    min_price_increment= Decimal(str(market_info['market']['bid']['price_unit'])),
+                    min_base_amount_increment= Decimal(str(market_info['market']['ask']['price_unit'])),
+                    min_quote_amount_increment= Decimal(str(market_info['market']['bid']['price_unit'])),
+                    min_notional_size = Decimal(str(market_info['market']['bid']['min_total'])),
+                    supports_limit_orders = True,
+                    supports_market_orders = False
+                )
+            except Exception as e:
+                self.logger().debug("Error updating trading rules")
+                self.logger().debug(str(e))
 
     async def _update_order_status(self):
         tracked_orders = self._in_flight_orders.copy()
@@ -786,11 +795,13 @@ cdef class UpbitExchange(ExchangeBase):
         if not (http_method == 'POST'):
             params = data
             data = None
+        else:
+            params = None
 
         async with self._shared_client.request(http_method, url=full_url,
                                                timeout=API_CALL_TIMEOUT,
                                                data=data, params=params, headers=headers) as response:
-            if response.status != 200:
+            if response.status not in [200,201]:
                 self.logger().info(f"Issue with upbit API {http_method} to {url}, response: ")
                 self.logger().info(await response.text())
                 raise IOError(f"Error fetching data from {full_url}. HTTP status is {response.status}.")
