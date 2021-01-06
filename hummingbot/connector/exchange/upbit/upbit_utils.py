@@ -8,7 +8,7 @@ CENTRALIZED = True
 
 EXAMPLE_PAIR = "ETH-BTC"
 
-DEFAULT_FEES = [0.0, 0.2]
+DEFAULT_FEES = [0.15, 0.15]
 
 UPBIT_ROOT_API = "https://api.upbit.com/v1"
 
@@ -43,7 +43,7 @@ def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
 async def get_ws_api_key():
     async with aiohttp.ClientSession() as client:
         response: aiohttp.ClientResponse = await client.get(
-            f"{LOOPRING_ROOT_API}{LOOPRING_WS_KEY_PATH}"
+            f"{UPBIT_ROOT_API}"
         )
         if response.status != 200:
             raise IOError(f"Error getting WS key. Server responded with status: {response.status}.")

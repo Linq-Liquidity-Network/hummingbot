@@ -132,18 +132,12 @@ cdef class UpbitInFlightOrder(InFlightOrderBase):
             diff_base: Decimal = new_executed_amount_base - self.executed_amount_base
             diff_quote: Decimal = new_executed_amount_quote - self.executed_amount_quote
             diff_fee: Decimal = new_fee_paid - self.fee_paid
-            if diff_quote > Decimal(0):
-                price: Decimal = diff_quote / diff_base
-            else:
-                price: Decimal = self.executed_amount_quote / self.executed_amount_base
+            price: Decimal = Decimal(data['price'])
 
             events.append((MarketEvent.OrderFilled, diff_base, price, diff_fee))
 
         if not self.is_done and new_status == UpbitOrderStatus.cancel:
             events.append((MarketEvent.OrderCancelled, None, None, None))
-
-        #if not self.is_done and new_status == UpbitOrderStatus.expired:
-        #    events.append((MarketEvent.OrderExpired, None, None, None))
 
         if not self.is_done and new_status == UpbitOrderStatus.FAIL:
             events.append((MarketEvent.OrderFailure, None, None, None))

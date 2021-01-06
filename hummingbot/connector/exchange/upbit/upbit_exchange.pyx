@@ -305,7 +305,7 @@ cdef class UpbitExchange(ExchangeBase):
                 creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
             except Exception as e:
                 self.logger().info(e)
-                return True
+                raise Exception(e)
 
             # Verify the response from the exchange
             if "uuid" not in creation_response.keys():
@@ -320,7 +320,14 @@ cdef class UpbitExchange(ExchangeBase):
 
             if "executed_volume" in creation_response:
                 if Decimal(creation_response["executed_volume"]) > Decimal('0'):
+                    if is_buy:
+                        self.c_trigger_event(BUY_ORDER_CREATED_EVENT,
+                                 BuyOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), client_order_id))
+                    else:
+                        self.c_trigger_event(SELL_ORDER_CREATED_EVENT,
+                                 SellOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), client_order_id))
                     self._update_inflight_order(in_flight_order, creation_response)
+                    return False
             # Begin tracking order
             self.logger().info(
                 f"Created {in_flight_order.description} order {client_order_id} for {amount} {trading_pair}.")
@@ -333,8 +340,8 @@ cdef class UpbitExchange(ExchangeBase):
             self.logger().info(e)
 
             # Stop tracking this order
-            #self.stop_tracking(client_order_id)
-            #self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
+            self.stop_tracking(client_order_id)
+            self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
 
             return False
 
@@ -589,12 +596,12 @@ cdef class UpbitExchange(ExchangeBase):
         try:
             async with self._lock:
                 for data in updates:
-                    total_amount: Decimal = Decimal(data['balance'])
+                    available_amount: Decimal = Decimal(data['balance'])
                     token_symbol: str = data['currency']
                     amount_locked: Decimal = Decimal(data['locked'])
 
-                    self._account_balances[token_symbol] = total_amount
-                    self._account_available_balances[token_symbol] = total_amount - amount_locked
+                    self._account_balances[token_symbol] = available_amount + amount_locked
+                    self._account_available_balances[token_symbol] = available_amount
 
         except Exception as e:
             self.logger().error(f"Could not set balance {repr(e)}")
