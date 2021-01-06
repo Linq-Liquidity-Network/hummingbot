@@ -678,11 +678,14 @@ cdef class UpbitExchange(ExchangeBase):
 
     async def _update_balances(self):
         balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE)
+        self.logger().warning(f"Upbit Balance: {balances_response}")
         await self._set_balances(balances_response)
 
-    async def _update_trading_rules(self):
+    async def _update_trading_rules(self,trading_pairs=None):
+        if not trading_pairs:
+            trading_pairs = self._trading_pairs
         markets_info = {}
-        for pair in self._trading_pairs:
+        for pair in trading_pairs:
             ex_tr_pair = convert_to_exchange_trading_pair(pair)
             query = {
                 'market': ex_tr_pair,
