@@ -36,8 +36,8 @@ class LoopringOrderBookTracker(OrderBookTracker):
     def __init__(
         self,
         trading_pairs: Optional[List[str]] = None,
-        rest_api_url: str = "https://api.loopring.io",
-        websocket_url: str = "wss://ws.loopring.io/v2/ws",
+        rest_api_url: str = "https://api3.loopring.io",
+        websocket_url: str = "wss://ws.api3.loopring.io/v2/ws",
         token_configuration: LoopringAPITokenConfigurationDataSource = None,
         loopring_auth: str = ""
     ):

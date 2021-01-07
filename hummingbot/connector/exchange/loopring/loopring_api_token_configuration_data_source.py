@@ -13,7 +13,7 @@ from typing import (
 from hummingbot.core.event.events import TradeType
 from hummingbot.core.utils.async_utils import safe_ensure_future
 
-TOKEN_CONFIGURATIONS_URL = '/api/v2/exchange/tokens'
+TOKEN_CONFIGURATIONS_URL = '/api/v3/exchange/tokens'
 
 
 class LoopringAPITokenConfigurationDataSource():
@@ -38,7 +38,7 @@ class LoopringAPITokenConfigurationDataSource():
     async def _configure(self):
         async with aiohttp.ClientSession() as client:
             response: aiohttp.ClientResponse = await client.get(
-                f"https://api.loopring.io{TOKEN_CONFIGURATIONS_URL}"
+                f"https://api3.loopring.io{TOKEN_CONFIGURATIONS_URL}"
             )
 
             if response.status >= 300:
@@ -82,25 +82,35 @@ class LoopringAPITokenConfigurationDataSource():
     def get_tokens(self) -> List[int]:
         return list(self._token_configurations.keys())
 
-    def sell_buy_amounts(self, baseid, quoteid, amount, price, side) -> Tuple[int]:
+    def sell_buy_amounts(self, base, quote, amount, price, side) -> Tuple[int]:
         """ Returns the buying and selling amounts for unidirectional orders, based on the order
             side, price and amount and returns the padded values.
         """
-        quote_amount = amount * price
-        padded_amount = self.pad(amount, baseid)
-        padded_quote_amount = self.pad(quote_amount, quoteid)
+        
+        quote_volume = amount * price
 
         if side is TradeType.SELL:
             return {
-                "tokenSId": baseid,
-                "tokenBId": quoteid,
-                "amountS": padded_amount,
-                "amountB": padded_quote_amount,
+              "sellToken": {
+                  "token": base,
+                  "volume": amount
+              },
+              "buyToken": {
+                  "token": quote,
+                  "volume": quote_volume
+              },
+              "fillAmountBOrS": False
             }
         else:
             return {
-                "tokenSId": quoteid,
-                "tokenBId": baseid,
-                "amountS": padded_quote_amount,
-                "amountB": padded_amount,
+              "sellToken": {
+                  "token": quote,
+                  "volume": quote_volume
+              },
+              "buyToken": {
+                  "token": base,
+                  "volume": amount
+              },
+              "fillAmountBOrS": True
             }
+            

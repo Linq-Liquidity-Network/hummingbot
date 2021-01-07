@@ -81,17 +81,17 @@ API_CALL_TIMEOUT = 10.0
 
 # ==========================================================
 
-GET_ORDER_ROUTE = "/api/v2/order"
-MAINNET_API_REST_ENDPOINT = "https://api.loopring.io/"
-MAINNET_WS_ENDPOINT = "wss://ws.loopring.io/v2/ws"
-EXCHANGE_INFO_ROUTE = "api/v2/timestamp"
-BALANCES_INFO_ROUTE = "api/v2/user/balances"
-ACCOUNT_INFO_ROUTE = "api/v2/account"
-MARKETS_INFO_ROUTE = "api/v2/exchange/markets"
-TOKENS_INFO_ROUTE = "api/v2/exchange/tokens"
-NEXT_ORDER_ID = "api/v2/orderId"
+GET_ORDER_ROUTE = "/api/v3/order"
+MAINNET_API_REST_ENDPOINT = "https://api3.loopring.io/"
+MAINNET_WS_ENDPOINT = "wss://ws.api3.loopring.io/v2/ws"
+EXCHANGE_INFO_ROUTE = "api/v3/timestamp"
+BALANCES_INFO_ROUTE = "api/v3/user/balances"
+ACCOUNT_INFO_ROUTE = "api/v3/account"
+MARKETS_INFO_ROUTE = "api/v3/exchange/markets"
+TOKENS_INFO_ROUTE = "api/v3/exchange/tokens"
+NEXT_ORDER_ID = "api/v3/storageId"
 ORDER_ROUTE = "api/v3/order"
-ORDER_CANCEL_ROUTE = "api/v2/orders"
+ORDER_CANCEL_ROUTE = "api/v3/order"
 MAXIMUM_FILL_COUNT = 16
 UNRECOGNIZED_ORDER_DEBOUCE = 20  # seconds
 
@@ -266,8 +266,8 @@ cdef class LoopringExchange(ExchangeBase):
             next_id = self._next_order_id
             if force_sync or self._next_order_id.get(token) is None:
                 try:
-                    response = await self.api_request("GET", NEXT_ORDER_ID, params={"accountId": self._loopring_accountid, "tokenSId": token})
-                    next_id = response["data"]
+                    response = await self.api_request("GET", NEXT_ORDER_ID, params={"accountId": self._loopring_accountid, "sellTokenId": token})
+                    next_id = response["orderId"]
                     self._next_order_id[token] = next_id
                 except Exception as e:
                     self.logger().info(str(e))
@@ -310,19 +310,17 @@ cdef class LoopringExchange(ExchangeBase):
         baseid, quoteid = self._token_configuration.get_tokenid(base), self._token_configuration.get_tokenid(quote)
 
         validSince = int(time.time()) - 3600
-        order_details = self._token_configuration.sell_buy_amounts(baseid, quoteid, amount, price, order_side)
+        order_details = self._token_configuration.sell_buy_amounts(base, quote, amount, price, order_side)
         token_s_id = int(order_details["tokenSId"])
         order_id = await self._get_next_order_id(token_s_id)
         order = {
-            "exchangeId": self._loopring_exchangeid,
-            "orderId": order_id,
+            "exchange": self._loopring_exchangeid,
+            "storageId": order_id,
             "accountId": self._loopring_accountid,
             "allOrNone": "false",
             "validSince": validSince,
             "validUntil": validSince + (604800 * 5),  # Until week later
             "maxFeeBips": 63,
-            "label": 20,
-            "buy": "true" if order_side is TradeType.BUY else "false",
             "clientOrderId": client_order_id,
             **order_details
         }
@@ -336,10 +334,7 @@ cdef class LoopringExchange(ExchangeBase):
 
         # Update with signature
         order.update({
-            "hash": str(msgHash),
-            "signatureRx": str(signed_message.sig.R.x),
-            "signatureRy": str(signed_message.sig.R.y),
-            "signatureS": str(signed_message.sig.s)
+            "eddsaSignature": str(signed_message.sig.R.x) + str(signed_message.sig.R.y) + str(signed_message.sig.s)
         })
 
         return await self.api_request("POST", ORDER_ROUTE, params=order, data=order)
@@ -374,6 +369,7 @@ cdef class LoopringExchange(ExchangeBase):
 
             try:
                 creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
+                self.logger().warning(creation_response)
             except asyncio.exceptions.TimeoutError:
                 # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status
@@ -777,10 +773,8 @@ cdef class LoopringExchange(ExchangeBase):
                 self.logger().info(e)
 
     async def _update_balances(self):
-        balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE,
-                                                   params = {
-                                                       "accountId": self._loopring_accountid
-                                                   })
+        balances_response = await self.api_request("GET", f"{BALANCES_INFO_ROUTE}?accountId={self._loopring_accountid}")
+        print(balances_response)
         await self._set_balances(balances_response["data"])
 
     async def _update_trading_rules(self):
