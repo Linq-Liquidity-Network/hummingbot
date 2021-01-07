@@ -146,7 +146,7 @@ cdef class UpbitExchange(ExchangeBase):
 
         super().__init__()
 
-        self._real_time_balance_update = False
+        self._real_time_balance_update = True
 
         self._upbit_auth = UpbitAuth(upbit_api_key, upbit_private_key)
 
@@ -680,9 +680,11 @@ cdef class UpbitExchange(ExchangeBase):
         balances_response = await self.api_request("GET", BALANCES_INFO_ROUTE)
         await self._set_balances(balances_response)
 
-    async def _update_trading_rules(self):
+    async def _update_trading_rules(self,trading_pairs=None):
+        if not trading_pairs:
+            trading_pairs = self._trading_pairs
         markets_info = {}
-        for pair in self._trading_pairs:
+        for pair in trading_pairs:
             ex_tr_pair = convert_to_exchange_trading_pair(pair)
             query = {
                 'market': ex_tr_pair,
