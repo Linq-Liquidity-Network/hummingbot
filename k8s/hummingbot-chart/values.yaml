@@ -192,3 +192,35 @@ global:
       options:
         paperTrade: false
         strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt"         
+    #lm-bitbay-binance-eth-usdt-ll:
+    #  accounts:
+    #    - binance-dev1
+    #    - bitbay-dev1
+    #  strategy: liquidity_mirroring
+    #  options:
+    #    paperTrade: false
+    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_usdt_ll" 
+    #lm-bitbay-binance-eth-btc-ll:
+    #  accounts:
+    #    - binance-dev1
+    #    - bitbay-dev1
+    #  strategy: liquidity_mirroring
+    #  options:
+    #    paperTrade: false
+    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_btc_ll"          
+    #lm-bitbay-binance-btc-usdt-ll:
+    #  accounts:
+    #    - binance-dev1
+    #    - bitbay-dev1
+    #  strategy: liquidity_mirroring
+    #  options:
+    #    paperTrade: false
+    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt_ll"           
+    lm-upbit-binance-eth-btc:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_btc"        
