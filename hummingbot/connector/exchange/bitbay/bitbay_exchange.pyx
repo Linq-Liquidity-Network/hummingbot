@@ -767,30 +767,36 @@ cdef class BitbayExchange(ExchangeBase):
                 except Exception as e:
                     self.logger().error(f"Failed to update Bitbay order {tracked_order.exchange_order_id}")
                     self.logger().error(e)
-            else:
-                try:
-                    trading_pair = item["market"]
-                    if trading_pair not in self._trading_pairs:
-                        continue
-                    trade_type = item["offerType"]
-                    price = item["rate"]
-                    url = f"{ORDER_CANCEL_ROUTE}".replace(":trading_pair/:id/:type/:price",
-                                                      f"{trading_pair}/{exchange_id}/{trade_type}/{price}")
-                    headers = self.generate_request_headers()
 
-                    res = await self.api_request("DELETE", url, headers=headers, secure=True)
-                except:
-                    pass
         #Go through the orders that were not included in the response from ORDERS_ENDPOINT    
         for client_order_id, tracked_order in tracked_orders.iteritems():
             bitbay_order_id = tracked_order.exchange_order_id
             if bitbay_order_id is None:
                 # This order is still pending acknowledgement from the exchange
                 if tracked_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
-                    self.logger().warning(f"marking {client_order_id} as cancelled")
-                    cancellation_event = OrderCancelledEvent(now(), client_order_id)
-                    self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
-                    self.c_stop_tracking_order(client_order_id)
+                    cancel_res = None
+                    for item in items:
+                        try:
+                            trading_pair = item["market"]
+                            if trading_pair not in self._trading_pairs:
+                                continue
+                            trade_type = item["offerType"]
+                            price = item["rate"]
+                            start_amount = item["startAmount"]
+                            if (price == tracked_order.price) and (start_amount == tracked_order.amount):
+                                url = f"{ORDER_CANCEL_ROUTE}".replace(":trading_pair/:id/:type/:price",
+                                                                  f"{trading_pair}/{exchange_id}/{trade_type}/{price}")
+                                headers = self.generate_request_headers()
+
+                                cancel_res = await self.api_request("DELETE", url, headers=headers, secure=True)
+                                break
+                        except:
+                            pass
+                    if not cancel_res:
+                        self.logger().warning(f"marking {client_order_id} as cancelled")
+                        cancellation_event = OrderCancelledEvent(now(), client_order_id)
+                        self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
+                        self.c_stop_tracking_order(client_order_id)
             else:
                 self._in_flight_orders_by_exchange_id[bitbay_order_id] = tracked_order
 
