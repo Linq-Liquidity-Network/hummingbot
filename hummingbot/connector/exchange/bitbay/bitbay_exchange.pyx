@@ -784,12 +784,8 @@ cdef class BitbayExchange(ExchangeBase):
                             price = item["rate"]
                             start_amount = item["startAmount"]
                             if (price == tracked_order.price) and (start_amount == tracked_order.amount):
-                                url = f"{ORDER_CANCEL_ROUTE}".replace(":trading_pair/:id/:type/:price",
-                                                                  f"{trading_pair}/{exchange_id}/{trade_type}/{price}")
-                                headers = self.generate_request_headers()
-
-                                cancel_res = await self.api_request("DELETE", url, headers=headers, secure=True)
-                                break
+                                tracked_order.update_exchange_order_id(item["id"])
+                                await self.cancel_order(client_order_id)
                         except:
                             pass
                     if not cancel_res:
