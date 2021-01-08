@@ -785,7 +785,7 @@ cdef class BitbayExchange(ExchangeBase):
                             start_amount = item["startAmount"]
                             if (price == tracked_order.price) and (start_amount == tracked_order.amount):
                                 tracked_order.update_exchange_order_id(item["id"])
-                                await self.cancel_order(client_order_id)
+                                cancel_res = await self.cancel_order(client_order_id)
                         except:
                             pass
                     if not cancel_res:
