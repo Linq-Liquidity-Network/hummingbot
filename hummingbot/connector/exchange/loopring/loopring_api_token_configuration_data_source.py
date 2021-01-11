@@ -45,7 +45,8 @@ class LoopringAPITokenConfigurationDataSource():
                 raise IOError(f"Error fetching active loopring token configurations. HTTP status is {response.status}.")
 
             response_dict: Dict[str, Any] = await response.json()
-            for config in response_dict['data']:
+
+            for config in response_dict:
                 self._token_configurations[config['tokenId']] = config
                 self._tokenid_lookup[config['symbol']] = config['tokenId']
                 self._symbol_lookup[config['tokenId']] = config['symbol']
@@ -82,34 +83,36 @@ class LoopringAPITokenConfigurationDataSource():
     def get_tokens(self) -> List[int]:
         return list(self._token_configurations.keys())
 
-    def sell_buy_amounts(self, base, quote, amount, price, side) -> Tuple[int]:
+    def sell_buy_amounts(self, baseid, quoteid, amount, price, side) -> Tuple[int]:
         """ Returns the buying and selling amounts for unidirectional orders, based on the order
             side, price and amount and returns the padded values.
         """
         
-        quote_volume = amount * price
+        quote_amount = amount * price
+        padded_amount = int(self.pad(amount, baseid))
+        padded_quote_amount = int(self.pad(quote_amount, quoteid))
 
         if side is TradeType.SELL:
             return {
               "sellToken": {
-                  "token": base,
-                  "volume": amount
+                  "tokenId": str(baseid),
+                  "volume": str(padded_amount)
               },
               "buyToken": {
-                  "token": quote,
-                  "volume": quote_volume
+                  "tokenId": str(quoteid),
+                  "volume": str(padded_quote_amount)
               },
               "fillAmountBOrS": False
             }
         else:
             return {
               "sellToken": {
-                  "token": quote,
-                  "volume": quote_volume
+                  "tokenId": str(quoteid),
+                  "volume": str(padded_quote_amount)
               },
               "buyToken": {
-                  "token": base,
-                  "volume": amount
+                  "tokenId": str(baseid),
+                  "volume": str(padded_amount)
               },
               "fillAmountBOrS": True
             }

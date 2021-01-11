@@ -6,7 +6,7 @@ from hummingbot.client.config.config_methods import using_exchange
 
 CENTRALIZED = True
 
-EXAMPLE_PAIR = "LRC-ETH"
+EXAMPLE_PAIR = "LRC-USDT"
 
 DEFAULT_FEES = [0.0, 0.2]
 
