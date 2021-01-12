@@ -20,5 +20,12 @@ class Order:
     def price(self) -> Decimal:
         return self._price
 
+    def is_live_uncancelled(self) -> bool:
+        return self.state in [OrderState.ACTIVE, OrderState.PENDING]
+
+    def mark_canceled(self):
+        if self.state in [OrderState.ACTIVE, OrderState.PENDING, OrderState.UNSENT]:
+            self.state = OrderState.PENDING_CANCEL
+
     def __repr__(self):
         return f"(id={self.id}, price={self.price}, amount_remaining={self.amount_remaining}, state={self.state}, side={self.side})"

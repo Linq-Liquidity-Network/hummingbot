@@ -7,17 +7,10 @@ from libc.stdint cimport int64_t
 
 cdef class LiquidityMirroringStrategy(StrategyBase):
     cdef:
-        list mirrored_market_pairs
-        list primary_market_pairs
+        object mirrored_market_pair
+        object primary_market_pair
         list bid_amounts
         list ask_amounts
-        list previous_sells
-        list previous_buys
-        list buys_to_replace
-        list sells_to_replace
-        list bid_replace_ranks
-        list ask_replace_ranks
-        dict marked_for_deletion
         str slack_url
         object performance_logger
         object best_bid_start
@@ -30,10 +23,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         bint fail_message_sent
         bint crossed_books
         object start_time
-        object primary_best_bid
-        object primary_best_ask
-        object mirrored_best_bid
-        object mirrored_best_ask
         object order_price_markup
         object max_exposure_base
         object max_exposure_quote
@@ -71,12 +60,9 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         object desired_book
         object current_book
 
+    cdef c_check_balances(self)
     cdef c_process_market_pair(self, object market_pair)
-    cdef object c_get_fee_markup(self, object primary_side, object price, object amount)
-    cdef object c_get_fee_markup_from_exchanges(self, object primary_side, object price, object amount)
     cdef bint is_maker_exchange(self, object market)
     cdef bint is_taker_exchange(self, object market)
-    cdef bint _has_different_sign(self, object a, object b)
-    cdef bint _has_reduced(self, object new, object old)
     cdef _did_create_order(self, object order_created_event)
     cdef _did_complete_order(self, object completed_event)

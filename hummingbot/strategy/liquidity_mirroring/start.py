@@ -4,12 +4,13 @@ from typing import (
 )
 from decimal import Decimal
 from hummingbot.client.config.global_config_map import global_config_map
+from hummingbot.connector.exchange_base import ExchangeBase
 from hummingbot.connector.markets_recorder import MarketsRecorder
 from hummingbot.connector.exchange.paper_trade import create_paper_trade_market
 from hummingbot.strategy.market_trading_pair_tuple import MarketTradingPairTuple
-from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring_market_pair import LiquidityMirroringMarketPair
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring import LiquidityMirroringStrategy
 from hummingbot.strategy.liquidity_mirroring.liquidity_mirroring_config_map import liquidity_mirroring_config_map
+
 
 def start(self):
     primary_market = liquidity_mirroring_config_map.get("primary_market").value.lower()
@@ -37,7 +38,7 @@ def start(self):
         mirrored_market_trading_pair: str = mirrored_trading_pair
         primary_assets: List[Tuple[str, str]] = self._initialize_market_assets(primary_market, [primary_market_trading_pair])[0]
         secondary_assets: List[Tuple[str, str]] = self._initialize_market_assets(mirrored_market,
-                                                                           [mirrored_market_trading_pair])[0]                                                                           
+                                                                                 [mirrored_market_trading_pair])[0]
     except ValueError as e:
         self._notify(str(e))
         return
@@ -49,38 +50,38 @@ def start(self):
         denominator = Decimal(0)
         for summand in denominations:
             denominator += Decimal(summand)
-        
+
         if denominator == 0:
             self.logger().warning("empty bid ratio list!")
             return
         else:
             for summand in denominations:
-                bid_ratios.append(Decimal(summand)/denominator)
+                bid_ratios.append(Decimal(summand) / denominator)
     else:
-        bid_ratios = [Decimal(1/55),Decimal(2/55),Decimal(3/55),Decimal(4/55),Decimal(5/55),Decimal(6/55),
-                               Decimal(7/55),Decimal(8/55),Decimal(9/55),Decimal(10/55)]
+        bid_ratios = [Decimal(1 / 55), Decimal(2 / 55), Decimal(3 / 55), Decimal(4 / 55), Decimal(5 / 55), Decimal(6 / 55),
+                      Decimal(7 / 55), Decimal(8 / 55), Decimal(9 / 55), Decimal(10 / 55)]
 
-    ask_ratios_type = liquidity_mirroring_config_map.get("ask_amount_ratio_type").value                               
+    ask_ratios_type = liquidity_mirroring_config_map.get("ask_amount_ratio_type").value
     if ask_ratios_type == "manual":
         ask_ratios = []
         denominations = liquidity_mirroring_config_map.get("ask_amount_ratios").value
         denominator = Decimal(0)
         for summand in denominations:
             denominator += Decimal(summand)
-        
+
         if denominator == 0:
             self.logger().warning("empty ask ratio list!")
             return
         else:
             for summand in denominations:
-                ask_ratios.append(Decimal(summand)/denominator)
+                ask_ratios.append(Decimal(summand) / denominator)
     else:
-        ask_ratios = [Decimal(1/55),Decimal(2/55),Decimal(3/55),Decimal(4/55),Decimal(5/55),Decimal(6/55),
-                               Decimal(7/55),Decimal(8/55),Decimal(9/55),Decimal(10/55)]
+        ask_ratios = [Decimal(1 / 55), Decimal(2 / 55), Decimal(3 / 55), Decimal(4 / 55), Decimal(5 / 55), Decimal(6 / 55),
+                      Decimal(7 / 55), Decimal(8 / 55), Decimal(9 / 55), Decimal(10 / 55)]
 
     market_names: List[Tuple[str, List[str]]] = [(primary_market, [primary_market_trading_pair]),
                                                  (mirrored_market, [mirrored_market_trading_pair])]
-    if not paper_trade_offset:                          
+    if not paper_trade_offset:
         self._initialize_wallet(token_trading_pairs=list(set(primary_assets + secondary_assets)))
         self._initialize_markets(market_names)
     else:
@@ -104,11 +105,11 @@ def start(self):
         self.markets_recorder.start()
 
     self.assets = set(primary_assets + secondary_assets)
-    self.primary_market_trading_pair_tuples: List[MarketTradingPairTuple] = [MarketTradingPairTuple(self.markets[primary_market], primary_market_trading_pair, primary_assets[0], primary_assets[1])]
-    self.mirrored_market_trading_pair_tuples: List[MarketTradingPairTuple] = [MarketTradingPairTuple(self.markets[mirrored_market], mirrored_market_trading_pair, secondary_assets[0], secondary_assets[1])]
+    self.primary_market_trading_pair_tuples: MarketTradingPairTuple = MarketTradingPairTuple(self.markets[primary_market], primary_market_trading_pair, primary_assets[0], primary_assets[1])
+    self.mirrored_market_trading_pair_tuples: MarketTradingPairTuple = MarketTradingPairTuple(self.markets[mirrored_market], mirrored_market_trading_pair, secondary_assets[0], secondary_assets[1])
     self.market_trading_pair_tuples = self.primary_market_trading_pair_tuples + self.mirrored_market_trading_pair_tuples
-    self.strategy = LiquidityMirroringStrategy(primary_market_pairs=self.primary_market_trading_pair_tuples,
-                                               mirrored_market_pairs=self.mirrored_market_trading_pair_tuples,
+    self.strategy = LiquidityMirroringStrategy(primary_market_pair=self.primary_market_trading_pair_tuples,
+                                               mirrored_market_pair=self.mirrored_market_trading_pair_tuples,
                                                two_sided_mirroring=two_sided_mirroring,
                                                order_price_markup=order_price_markup,
                                                max_exposure_base=max_exposure_base,
