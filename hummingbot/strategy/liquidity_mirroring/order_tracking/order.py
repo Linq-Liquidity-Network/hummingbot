@@ -7,14 +7,18 @@ from hummingbot.strategy.liquidity_mirroring.order_tracking.order_state import O
 class Order:
     def __init__(self, id: str, price: Decimal, amount: Decimal, side: TradeType, state: OrderState = OrderState.UNSENT):
         self.id = id
-        self.price = price
         self.amount_remaining = amount
         self.state = state
+        self._price = price
         self._side = side
 
     @property
     def side(self):
         return self._side
+
+    @property
+    def price(self) -> Decimal:
+        return self._price
 
     def __repr__(self):
         return f"(id={self.id}, price={self.price}, amount_remaining={self.amount_remaining}, state={self.state}, side={self.side})"
