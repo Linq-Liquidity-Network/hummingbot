@@ -16,6 +16,9 @@ class OrderTracker:
         self._asks = {}
         self._lock = asyncio.Lock()
 
+    def __len__(self):
+        return len(self._orders)
+
     async def __aenter__(self):
         await self._lock.acquire()
 
