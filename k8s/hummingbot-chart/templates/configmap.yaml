@@ -48,11 +48,13 @@ data:
     tmux send-keys -t hummingbot:hbstrat "python3 bin/hummingbot_quickstart.py" Enter
     sleep 2
     tmux send-keys -t hummingbot:hbstrat "import strategies/${STRATEGY_FILE_NAME}.yml" Enter
-    sleep 10
+    sleep 15
     tmux send-keys -t hummingbot:hbstrat Enter
-    sleep 10
+    sleep 15
     tmux send-keys -t hummingbot:hbstrat Enter
-
+    sleep 15
+    tmux send-keys -t hummingbot:hbstrat Enter
+    
     tail -F /home/hummingbot/logs/logs_strategies/${STRATEGY_FILE_NAME}.log & tail -f /dev/null
 
 
