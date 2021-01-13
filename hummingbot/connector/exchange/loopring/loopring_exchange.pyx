@@ -374,11 +374,11 @@ cdef class LoopringExchange(ExchangeBase):
 
             try:
                 creation_response = await self.place_order(client_order_id, trading_pair, amount, order_side is TradeType.BUY, order_type, price)
-            except Exception as e:
+            except asyncio.TimeoutError:
                 # We timed out while placing this order. We may have successfully submitted the order, or we may have had connection
                 # issues that prevented the submission from taking place. We'll assume that the order is live and let our order status
                 # updates mark this as cancelled if it doesn't actually exist.
-                self.logger().warning(e)
+                self.logger().warning(f"Order {client_order_id} has timed out and putatively failed. Order will be tracked until reconciled.")
                 return True
 
             # Verify the response from the exchange
