@@ -293,7 +293,7 @@ cdef class BitbayExchange(ExchangeBase):
                 # updates mark this as cancelled if it doesn't actually exist.
                 self.logger().info("Time out error occurred")
                 self._awaiting_response -= 1
-                pass
+                return True
 
             # Verify the response from the exchange
             if "status" not in creation_response.keys():
@@ -311,7 +311,7 @@ cdef class BitbayExchange(ExchangeBase):
                         exc_info=True,
                     )
                     self.c_trigger_event(ORDER_FAILURE_EVENT, MarketOrderFailureEvent(now(), client_order_id, order_type))
-                    return
+                    return False
                 else:
                     raise Exception(f"bitbay api returned unexpected '{status}' as status of created order")
 
@@ -335,7 +335,7 @@ cdef class BitbayExchange(ExchangeBase):
                         "rate": transaction['rate']
                     }
                     self._update_inflight_order(in_flight_order, data)
-
+            return True
         except Exception as e:
             self.logger().warning(f"Error submitting {order_side.name} {order_type.name} order to bitbay for "
                                   f"{amount} {trading_pair} at {price}.")
@@ -348,10 +348,10 @@ cdef class BitbayExchange(ExchangeBase):
                           order_type: OrderType,
                           price: Optional[Decimal] = Decimal('NaN')):
         try:
-            await self.execute_order(TradeType.BUY, order_id, trading_pair, amount, order_type, price)
-
-            self.c_trigger_event(BUY_ORDER_CREATED_EVENT,
-                                 BuyOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
+            order_created = await self.execute_order(TradeType.BUY, order_id, trading_pair, amount, order_type, price)
+            if order_created:
+                self.c_trigger_event(BUY_ORDER_CREATED_EVENT,
+                                     BuyOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
         except ValueError as e:
             # Stop tracking this order
             self.c_stop_tracking_order(order_id)
@@ -365,9 +365,10 @@ cdef class BitbayExchange(ExchangeBase):
                            order_type: OrderType,
                            price: Optional[Decimal] = Decimal('NaN')):
         try:
-            await self.execute_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price)
-            self.c_trigger_event(SELL_ORDER_CREATED_EVENT,
-                                 SellOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
+            order_created = await self.execute_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price)
+            if order_created:
+                self.c_trigger_event(SELL_ORDER_CREATED_EVENT,
+                                     SellOrderCreatedEvent(now(), order_type, trading_pair, Decimal(amount), Decimal(price), order_id))
         except ValueError as e:
             # Stop tracking this order
             self.c_stop_tracking_order(order_id)
@@ -423,6 +424,7 @@ cdef class BitbayExchange(ExchangeBase):
                 raise Exception(f"Cancel order returned errors {errors}")
             else:
                 self.c_trigger_event(ORDER_CANCELLED_EVENT,cancellation_event)
+                self.c_stop_tracking_order(client_order_id)
             
             return True
 
@@ -643,7 +645,7 @@ cdef class BitbayExchange(ExchangeBase):
                 await asyncio.sleep(1.0)
 
     async def _user_stream_event_listener(self):
-        self._check_message_queue()
+        await self._check_message_queue()
         async for event_message in self._iter_user_event_queue():
             try:
                 event: Dict[str, Any] = event_message
@@ -730,7 +732,9 @@ cdef class BitbayExchange(ExchangeBase):
                 tracked_order: BitbayInFlightOrder = self._in_flight_orders_by_exchange_id.get(exchange_order_id)
 
                 if tracked_order is None:
-                    self.logger().warning(f"{self._in_flight_orders_by_exchange_id}")
+                    if 'action' in data:
+                        if data['action'] == 'remove':
+                            continue
                     self.logger().warning(f"Unrecognized order ID from user stream: {exchange_order_id}.")
                     self.logger().warning(f"Event: {data}")
                     continue
@@ -763,16 +767,32 @@ cdef class BitbayExchange(ExchangeBase):
                 except Exception as e:
                     self.logger().error(f"Failed to update Bitbay order {tracked_order.exchange_order_id}")
                     self.logger().error(e)
+
         #Go through the orders that were not included in the response from ORDERS_ENDPOINT    
         for client_order_id, tracked_order in tracked_orders.iteritems():
             bitbay_order_id = tracked_order.exchange_order_id
             if bitbay_order_id is None:
                 # This order is still pending acknowledgement from the exchange
                 if tracked_order.created_at < (int(time.time()) - UNRECOGNIZED_ORDER_DEBOUCE):
-                    self.logger().warning(f"marking {client_order_id} as cancelled")
-                    cancellation_event = OrderCancelledEvent(now(), client_order_id)
-                    self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
-                    self.c_stop_tracking_order(client_order_id)
+                    cancel_res = None
+                    for item in items:
+                        try:
+                            trading_pair = item["market"]
+                            if trading_pair not in self._trading_pairs:
+                                continue
+                            trade_type = item["offerType"]
+                            price = item["rate"]
+                            start_amount = item["startAmount"]
+                            if (price == tracked_order.price) and (start_amount == tracked_order.amount):
+                                tracked_order.update_exchange_order_id(item["id"])
+                                cancel_res = await self.cancel_order(client_order_id)
+                        except:
+                            pass
+                    if not cancel_res:
+                        self.logger().warning(f"marking {client_order_id} as cancelled")
+                        cancellation_event = OrderCancelledEvent(now(), client_order_id)
+                        self.c_trigger_event(ORDER_CANCELLED_EVENT, cancellation_event)
+                        self.c_stop_tracking_order(client_order_id)
             else:
                 self._in_flight_orders_by_exchange_id[bitbay_order_id] = tracked_order
 
