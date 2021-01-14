@@ -55,7 +55,31 @@ class OrderTracker:
 
     def get_asks(self):
         return list(self._asks.values())
-    
+
+    @property
+    def best_bid(self):
+        book = [o for o in self._bids.values() if o.state <= OrderState.COMPLETE]
+        book.sort(key=lambda o: o.price, reverse = True)
+        return book[0] if len(book) > 0 else None
+
+    @property
+    def best_ask(self):
+        book = [o for o in self._asks.values() if o.state <= OrderState.COMPLETE]
+        book.sort(key=lambda o: o.price, reverse = False)
+        return book[0] if len(book) > 0 else None
+
+    def would_cross(self, order):
+        if order.side is TradeType.BUY:
+            best_ask = self.best_ask
+            if best_ask is not None and order.price >= best_ask.price:
+                return True
+        else:
+            best_bid = self.best_bid
+            if best_bid is not None and order.price <= best_bid.price:
+                return True
+
+        return False
+
     def cancel(self, id: str):
         order = self.remove_order(id)
         if order is None:

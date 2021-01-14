@@ -520,7 +520,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
     def _place_primary_orders(self, orders, available_amount):
         for order in orders:
-            if order.amount_remaining <= available_amount:
+            if (order.amount_remaining <= available_amount and not self.current_book.would_cross(order)):
                 if self._place_primary_order(order):
                     available_amount -= order.amount_remaining
 
