@@ -927,13 +927,15 @@ cdef class BlocktaneExchange(ExchangeBase):
         except asyncio.CancelledError:
             raise
         except Exception as err:
-            if "record.not_found" in str(err):
-                # The order doesn't exist
-                self.logger().info(f"The order {order_id} does not exist on Blocktane. Marking as cancelled.")
-                self.c_stop_tracking_order(order_id)
-                self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
-                                     OrderCancelledEvent(self._current_timestamp, order_id))
-                return order_id
+            if ("record.not_found" in str(err) 
+                and tracked_order is not None 
+                and tracked_order.created_at < (int(time.time()) - self.ORDER_NOT_EXIST_WAIT_TIME)):
+                    # The order doesn't exist
+                    self.logger().info(f"The order {order_id} does not exist on Blocktane. Marking as cancelled.")
+                    self.c_stop_tracking_order(order_id)
+                    self.c_trigger_event(self.MARKET_ORDER_CANCELLED_EVENT_TAG,
+                                        OrderCancelledEvent(self._current_timestamp, order_id))
+                    return order_id
 
             self.logger().error(
                 f"Failed to cancel order {order_id}: {str(err)}.",
