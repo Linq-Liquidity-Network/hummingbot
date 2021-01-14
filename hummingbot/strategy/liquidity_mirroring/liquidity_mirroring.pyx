@@ -390,15 +390,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             object market_trading_pair_tuple = self._sb_order_tracker.c_get_market_pair_from_order_id(order_id)
         full_order = self._sb_order_tracker.c_get_limit_order(market_trading_pair_tuple, order_id)
         if fail_event.order_type is OrderType.LIMIT:
-            # if not self.fail_message_sent:
-            #     market = market_trading_pair_tuple.market.name
-            #     price = full_order.price
-            #     amount = full_order.quantity
-            #     buy_sell = "BUY" if full_order.is_buy else "SELL"
-            #     msg = {"msg_type": "order failed", "data": {"market": market, "price": price, "amount": amount, "buy/sell": buy_sell, "id": order_id}}
-
-            #     SlackPusher(self.slack_url, "ORDER FAILED: " + str(msg))
-            #     self.fail_message_sent = True
             self._failed_market_order_count += 1
             self._last_failed_market_order_timestamp = fail_event.timestamp
 
@@ -438,7 +429,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             self.log_with_clock(logging.INFO,
                                 f"Limit order canceled on {market_trading_pair_tuple[0].name}: {order_id}")
 
-    cdef c_check_balances(self):
+    cdef c_run_periodic_tasks(self):
         current_time = datetime.timestamp(datetime.now())
         time_elapsed = current_time - self.start_time
         if (time_elapsed > 1800):
@@ -476,7 +467,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
         # Dispatch periodic tasks that run on certain cycles
         if self.cycle_number == 8:
-            self.c_check_balances()
+            self.c_run_periodic_tasks()
 
         if ((self.cycle_number % 2) == 0):
             self.logger().info(f"Amount to offset: {self.pm.amount_to_offset}")
@@ -512,7 +503,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         place_order = self.buy_with_specific_market if order.side is TradeType.BUY else self.sell_with_specific_market
 
         try:
-            order_id = place_order(self.primary_market_pair, quant_amount, OrderType.LIMIT, quant_price)
+            order_id = place_order(self.primary_market_pair, quant_amount, self.mm_order_type, quant_price)
             self.current_book.add_order(Order(order_id, order.price, order.amount_remaining, order.side, OrderState.PENDING))
             return True
         except:
@@ -520,14 +511,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
     def _place_primary_orders(self, orders, available_amount):
         for order in orders:
-            if (order.amount_remaining <= available_amount and not self.current_book.would_cross(order)):
+            order_amount = order.amount_remaining if order.side is TradeType.SELL else order.total
+            if (order_amount <= available_amount and not self.current_book.would_cross(order)):
                 if self._place_primary_order(order):
-                    available_amount -= order.amount_remaining
+                    available_amount -= order_amount
 
     # TODO with these changes, we should have a process that cancells all primary orders if we have network problems getting the updated
-    # orderbook from the mirrored exchange
-    # TODO, limit by max exposure as well as balances
-    def adjust_primary_orderbook(self): # TODO make async and take a lock like adjust_mirrored_orderbook and then call whenever appropreate events take place
+    #   orderbook from the mirrored exchange (could do this by just clearing the desired book on detection of these errors)
+    # TODO make async and take a lock like adjust_mirrored_orderbook and then call whenever appropreate events take place
+    def adjust_primary_orderbook(self): 
         if self.desired_book is None:
             return
 
@@ -542,6 +534,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
                     order.mark_canceled()
                 except Exception as e:
                     self.logger().info(f"failed to cancel order {e}")
+
+        # We limit exposures by assuming that PENDING_CANCEL orders should not count towards our current exposure.
+        # This may occasionally, temporarilly result in being over exposed, but the alternative leads to too much flashing in
+        # the books
+        active_exposures = self.current_book.get_uncancelled_exposures()
+        free_base_exposure = max(self.max_exposure_base - active_exposures.base, Decimal(0))
+        free_quote_exposure = max(self.max_exposure_quote - active_exposures.quote, Decimal(0))
+        available_base = min(free_base_exposure, available_base)
+        available_quote = min(free_quote_exposure, available_quote)
 
         # Place any new orders that we have the available balances to handle
         self._place_primary_orders(bids_to_place, available_quote)
@@ -571,7 +572,6 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
             return min((mirrored_market.get_balance(mirrored_asset)/quant_price), amount)
         else:
             return min(mirrored_market.get_balance(mirrored_asset), amount)
-        
 
     async def adjust_mirrored_orderbook(self):
         async with self.offset_order_tracker:

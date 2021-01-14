@@ -135,6 +135,9 @@ class OrderTracker:
     def get_pending_exposures(self):
         return self._get_exposures(lambda o: o.state is OrderState.PENDING or o.state is OrderState.UNSENT)
 
+    def get_uncancelled_exposures(self):
+        return self._get_exposures(lambda o: o.state in [OrderState.ACTIVE, OrderState.PENDING, OrderState.UNSENT])
+
     def get_total_amounts(self):
         amounts = OffsettingAmountsTuple()
         for order in self._orders.values():

@@ -60,7 +60,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         object desired_book
         object current_book
 
-    cdef c_check_balances(self)
+    cdef c_run_periodic_tasks(self)
     cdef c_process_market_pair(self, object market_pair)
     cdef bint is_maker_exchange(self, object market)
     cdef bint is_taker_exchange(self, object market)

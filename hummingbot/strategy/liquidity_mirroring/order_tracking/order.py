@@ -20,6 +20,10 @@ class Order:
     def price(self) -> Decimal:
         return self._price
 
+    @property
+    def total(self) -> Decimal:
+        return self._price * self.amount_remaining
+
     def is_live_uncancelled(self) -> bool:
         return self.state in [OrderState.ACTIVE, OrderState.PENDING]
 
