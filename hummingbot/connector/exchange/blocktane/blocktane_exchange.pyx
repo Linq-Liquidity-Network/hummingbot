@@ -947,6 +947,9 @@ cdef class BlocktaneExchange(ExchangeBase):
         safe_ensure_future(self.execute_cancel(trading_pair, order_id))
         return order_id
 
+    def cancel(self, trading_pair: str, client_order_id: str):
+        return self.c_cancel(trading_pair, client_order_id)
+
     async def cancel_all(self, timeout_seconds: float) -> List[CancellationResult]:
         incomplete_orders = [order for order in self._in_flight_orders.values() if not order.is_done]
         tasks = [self.execute_cancel(o.trading_pair, o.client_order_id) for o in incomplete_orders]
