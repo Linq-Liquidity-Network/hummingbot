@@ -274,7 +274,7 @@ cdef class LoopringExchange(ExchangeBase):
                     self.logger().info("Error getting the next order id from Loopring")
             else:
                 next_id = self._next_order_id[token]
-                self._next_order_id[token] = (next_id + 2) % 16384
+                self._next_order_id[token] = (next_id + 2) % 4294967294
 
         return next_id
 
