@@ -422,9 +422,6 @@ cdef class BitbayExchange(ExchangeBase):
                 self.c_stop_tracking_order(client_order_id)
             elif len(errors) > 0 and not ('OFFER_NOT_FOUND' in errors):
                 raise Exception(f"Cancel order returned errors {errors}")
-            else:
-                self.c_trigger_event(ORDER_CANCELLED_EVENT,cancellation_event)
-                self.c_stop_tracking_order(client_order_id)
             
             return True
 

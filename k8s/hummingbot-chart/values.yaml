@@ -223,4 +223,28 @@ global:
       strategy: liquidity_mirroring
       options:
         paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_btc"        
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_btc" 
+    lm-upbit-binance-eth-usdt:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_usdt" 
+    lm-upbit-binance-btc-usdt:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_btc_usdt" 
+    lm-loopring-binance-btc-usdt:
+      accounts:
+        - binance-staging1
+        - loopring-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_loopring_binance_lrc_usdt"          
