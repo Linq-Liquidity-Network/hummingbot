@@ -939,6 +939,9 @@ cdef class LoopringExchange(ExchangeBase):
             if response.status != 200:
                 self.logger().info(f"Issue with Loopring API {http_method} to {url}, response: ")
                 self.logger().info(await response.text())
+                data = await response.json()
+                if 'resultInfo' in data:
+                    return data
                 raise IOError(f"Error fetching data from {full_url}. HTTP status is {response.status}.")
             data = await response.json()
             return data
