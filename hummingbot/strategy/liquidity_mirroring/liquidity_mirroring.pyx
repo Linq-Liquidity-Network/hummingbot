@@ -519,6 +519,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
     # TODO with these changes, we should have a process that cancells all primary orders if we have network problems getting the updated
     #   orderbook from the mirrored exchange (could do this by just clearing the desired book on detection of these errors)
     # TODO make async and take a lock like adjust_mirrored_orderbook and then call whenever appropreate events take place
+    #   We're actually already fairly responsive with no flashing books, so this might not be necessary
     def adjust_primary_orderbook(self): 
         if self.desired_book is None:
             return
@@ -528,16 +529,15 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
 
         # Cancel any orders that we no longer want
         for order in orders_to_cancel:
-            if order.is_live_uncancelled():
+            if order.is_live():
                 try:
-                    self.c_cancel_order(self.primary_market_pair, order.id)
+                    self.primary_market_pair.market.cancel(self.primary_market_pair.trading_pair, order.id)
                     order.mark_canceled()
                 except Exception as e:
-                    self.logger().info(f"failed to cancel order {e}")
+                    self.logger().error(f"failed to cancel order", exc_info=True)
 
         # We limit exposures by assuming that PENDING_CANCEL orders should not count towards our current exposure.
-        # This may occasionally, temporarilly result in being over exposed, but the alternative leads to too much flashing in
-        # the books
+        # This may occasionally, temporarily result in being over exposed, but the alternative leads to too much flashing in the books.
         active_exposures = self.current_book.get_uncancelled_exposures()
         free_base_exposure = max(self.max_exposure_base - active_exposures.base, Decimal(0))
         free_quote_exposure = max(self.max_exposure_quote - active_exposures.quote, Decimal(0))

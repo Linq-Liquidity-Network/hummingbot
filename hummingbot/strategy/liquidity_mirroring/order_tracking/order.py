@@ -27,6 +27,9 @@ class Order:
     def is_live_uncancelled(self) -> bool:
         return self.state in [OrderState.ACTIVE, OrderState.PENDING]
 
+    def is_live(self) -> bool:
+        return self.state in [OrderState.ACTIVE, OrderState.PENDING, OrderState.PENDING_CANCEL]
+
     def mark_canceled(self):
         if self.state in [OrderState.ACTIVE, OrderState.PENDING, OrderState.UNSENT]:
             self.state = OrderState.PENDING_CANCEL
