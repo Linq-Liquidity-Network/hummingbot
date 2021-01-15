@@ -39,7 +39,7 @@ cdef class BlocktaneActiveOrderTracker:
     def get_rates_and_quantities(self, entry) -> tuple:
         amount = 0
         if len(entry[1]) > 0:
-            amount = entry[1] 
+            amount = entry[1]
         return float(entry[0]), float(amount)
 
     cdef tuple c_convert_diff_message_to_np_arrays(self, object message):
@@ -60,24 +60,14 @@ cdef class BlocktaneActiveOrderTracker:
 
         if len(bid_entries) > 0:
             bids = np.array(
-                [[timestamp,
-                  x[0],
-                  x[1],
-                  message.update_id]
-                  for x in [self.get_rates_and_quantities(entry) for entry in bid_entries]
-                ],
+                [[timestamp, x[0], x[1], message.update_id] for x in [self.get_rates_and_quantities(entry) for entry in bid_entries]],
                 dtype="float64",
                 ndmin=2
             )
 
         if len(ask_entries) > 0:
             asks = np.array(
-                [[timestamp,
-                  x[0],
-                  x[1],
-                  message.update_id]
-                  for x in [self.get_rates_and_quantities(entry) for entry in ask_entries]
-                ],
+                [[timestamp, x[0], x[1], message.update_id] for x in [self.get_rates_and_quantities(entry) for entry in ask_entries]],
                 dtype="float64",
                 ndmin=2
             )
