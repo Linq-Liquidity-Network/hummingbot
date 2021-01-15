@@ -274,7 +274,7 @@ cdef class LoopringExchange(ExchangeBase):
                     self.logger().info("Error getting the next order id from Loopring")
             else:
                 next_id = self._next_order_id[token]
-                self._next_order_id[token] = (next_id + 2) % 16384
+                self._next_order_id[token] = (next_id + 2) % 4294967294
 
         return next_id
 
@@ -939,6 +939,9 @@ cdef class LoopringExchange(ExchangeBase):
             if response.status != 200:
                 self.logger().info(f"Issue with Loopring API {http_method} to {url}, response: ")
                 self.logger().info(await response.text())
+                data = await response.json()
+                if 'resultInfo' in data:
+                    return data
                 raise IOError(f"Error fetching data from {full_url}. HTTP status is {response.status}.")
             data = await response.json()
             return data
