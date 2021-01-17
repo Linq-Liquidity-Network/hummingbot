@@ -115,7 +115,7 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
     ticker_parser.add_argument("--exchange", type=str, dest="exchange", help="The exchange of the market")
     ticker_parser.add_argument("--market", type=str, dest="market", help="The market (trading pair) of the order book")
     ticker_parser.set_defaults(func=hummingbot.ticker)
-    
+
     trade_parser = subparsers.add_parser("trade", help="Perform manual trade")
     trade_parser.add_argument("buy_sell", nargs=1, choices=("buy", "sell"))
     trade_parser.add_argument("amount", nargs=1, type=Decimal)
@@ -127,6 +127,18 @@ def load_parser(hummingbot) -> ThrowingArgumentParser:
 
     offset_amount_parser = subparsers.add_parser("zero_out_offset_amount", help="Sets the amount to offset on the LM strat")
     offset_amount_parser.set_defaults(func=hummingbot.zero_out_offset_amount)
+
+    heap_parser = subparsers.add_parser("heap_update", help="Shows the current heap for debugging memory issues")
+    heap_parser.add_argument("--refresh", default=False, action="store_true", dest="refresh", help="If set, resets the heap view")
+    heap_parser.add_argument("--index", type=int, default=None, dest="index", help="index of the heap object")
+    heap_parser.add_argument("--relation", type=str, default=None, dest="relation", help="equivalence realtion by which to order the heap results")
+    heap_parser.set_defaults(func=hummingbot.heap_update)
+
+    heap_parser2 = subparsers.add_parser("heap_setrel", help="Sets the starting point of the heap snapshot")
+    heap_parser2.set_defaults(func=hummingbot.heap_setrel)
+
+    heap_parser3 = subparsers.add_parser("heap_next", help="Gets the next entry from the current heap view")
+    heap_parser3.set_defaults(func=hummingbot.heap_next)
 
     depth_parser = subparsers.add_parser("depth", help="Display the depth of the specified exchange up to the specified level")
     depth_parser.add_argument("exchange", nargs=1, type=str)

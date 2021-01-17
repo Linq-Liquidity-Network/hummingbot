@@ -53,7 +53,9 @@ COPY --chown=hummingbot:hummingbot LICENSE .
 COPY --chown=hummingbot:hummingbot README.md .
 COPY --chown=hummingbot:hummingbot DATA_COLLECTION.md .
 COPY --chown=hummingbot:hummingbot slack_pusher.py .
-COPY --chown=hummingbot:hummingbot init.sh .
+COPY --chown=hummingbot:hummingbot initialize_key_files.py .
+COPY --chown=hummingbot:hummingbot sync_strategies.py .
+#COPY --chown=hummingbot:hummingbot init.sh .
 
 # activate hummingbot env when entering the CT
 RUN echo "source /home/hummingbot/miniconda3/etc/profile.d/conda.sh && conda activate $(head -1 setup/environment-linux.yml | cut -d' ' -f2)" >> ~/.bashrc
@@ -114,6 +116,7 @@ WORKDIR /home/hummingbot
 
 # Copy all build artifacts from builder image
 USER root
+#RUN chown root:root /home
 RUN chown -R root:root /home
 COPY --from=builder --chown=root:root /home/ /home/
 
@@ -121,10 +124,10 @@ COPY --from=builder --chown=root:root /home/ /home/
 COPY docker/etc /etc
 
 # Switch to hummingbot user # Swapped this to after the copy due to https://jira.atlassian.com/browse/BCLOUD-17319
-RUN chown -R hummingbot:hummingbot /home/ /home/ 
+RUN chown -R hummingbot:hummingbot /home/hummingbot/
 USER hummingbot:hummingbot
 
 # Setting bash as default shell because we have .bashrc with customized PATH (setting SHELL affects RUN, CMD and ENTRYPOINT, but not manual commands e.g. `docker run image COMMAND`!)
 SHELL [ "/bin/bash", "-lc" ]
 # Change init script permissions
-RUN chmod 777 init.sh
+#RUN chmod 777 init.sh
