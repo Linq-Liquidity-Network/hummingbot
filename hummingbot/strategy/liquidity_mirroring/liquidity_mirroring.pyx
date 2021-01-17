@@ -516,7 +516,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
                 if self._place_primary_order(order):
                     available_amount -= order_amount
 
-    # TODO with these changes, we should have a process that cancells all primary orders if we have network problems getting the updated
+    # TODO with these changes, we should have a process that cancels all primary orders if we have network problems getting the updated
     #   orderbook from the mirrored exchange (could do this by just clearing the desired book on detection of these errors)
     # TODO make async and take a lock like adjust_mirrored_orderbook and then call whenever appropreate events take place
     #   We're actually already fairly responsive with no flashing books, so this might not be necessary

@@ -69,6 +69,7 @@ class OrderTracker:
         return book[0] if len(book) > 0 else None
 
     def would_cross(self, order):
+        # We accept a cross of any order state here for added saftey
         if order.side is TradeType.BUY:
             best_ask = self.best_ask
             if best_ask is not None and order.price >= best_ask.price:
