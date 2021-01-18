@@ -240,7 +240,7 @@ global:
       options:
         paperTrade: false
         strategyFileName: "conf_liquidity_mirroring_upbit_binance_btc_usdt" 
-    lm-loopring-binance-btc-usdt:
+    lm-loopring-binance-lrc-usdt:
       accounts:
         - binance-staging1
         - loopring-dev1
