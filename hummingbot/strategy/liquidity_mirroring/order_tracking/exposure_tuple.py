@@ -7,4 +7,20 @@ class ExposureTuple:
         self.quote = quote_amount
 
     def __repr__(self):
-        return f"base={self.base}, quote={self.quote}"
+        return f"base[sells]={self.base}, quote[buys]={self.quote}"
+
+    @property
+    def buys(self):
+        return self.quote
+
+    @buys.setter
+    def buys(self, amount: Decimal):
+        self.quote += amount
+
+    @property
+    def sells(self):
+        return self.base
+
+    @sells.setter
+    def sells(self, amount: Decimal):
+        self.base += amount

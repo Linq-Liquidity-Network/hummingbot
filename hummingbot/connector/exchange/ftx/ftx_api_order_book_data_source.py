@@ -224,5 +224,3 @@ class FtxAPIOrderBookDataSource(OrderBookTrackerDataSource):
                 self.logger().error("Unexpected error with WebSocket connection. Retrying after 30 seconds...",
                                     exc_info=True)
                 await asyncio.sleep(30.0)
-
-

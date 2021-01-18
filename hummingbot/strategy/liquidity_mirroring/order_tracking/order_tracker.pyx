@@ -16,6 +16,9 @@ class OrderTracker:
         self._asks = {}
         self._lock = asyncio.Lock()
 
+    def __len__(self):
+        return len(self._orders)
+
     async def __aenter__(self):
         await self._lock.acquire()
 
@@ -52,7 +55,32 @@ class OrderTracker:
 
     def get_asks(self):
         return list(self._asks.values())
-    
+
+    @property
+    def best_bid(self):
+        book = [o for o in self._bids.values() if o.state <= OrderState.COMPLETE]
+        book.sort(key=lambda o: o.price, reverse = True)
+        return book[0] if len(book) > 0 else None
+
+    @property
+    def best_ask(self):
+        book = [o for o in self._asks.values() if o.state <= OrderState.COMPLETE]
+        book.sort(key=lambda o: o.price, reverse = False)
+        return book[0] if len(book) > 0 else None
+
+    def would_cross(self, order):
+        # We accept a cross of any order state here for added saftey
+        if order.side is TradeType.BUY:
+            best_ask = self.best_ask
+            if best_ask is not None and order.price >= best_ask.price:
+                return True
+        else:
+            best_bid = self.best_bid
+            if best_bid is not None and order.price <= best_bid.price:
+                return True
+
+        return False
+
     def cancel(self, id: str):
         order = self.remove_order(id)
         if order is None:
@@ -107,6 +135,9 @@ class OrderTracker:
 
     def get_pending_exposures(self):
         return self._get_exposures(lambda o: o.state is OrderState.PENDING or o.state is OrderState.UNSENT)
+
+    def get_uncancelled_exposures(self):
+        return self._get_exposures(lambda o: o.state in [OrderState.ACTIVE, OrderState.PENDING, OrderState.UNSENT])
 
     def get_total_amounts(self):
         amounts = OffsettingAmountsTuple()
