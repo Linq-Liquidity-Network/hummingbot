@@ -4,7 +4,7 @@
 
 # Define global variables
 global:
-  namespace: hummingbot
+  namespace: gracklebot
   releaseTag: placeholder
   name: 
   appName: 
@@ -247,4 +247,37 @@ global:
       strategy: liquidity_mirroring
       options:
         paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_loopring_binance_lrc_usdt"          
+        strategyFileName: "conf_liquidity_mirroring_loopring_binance_lrc_usdt"
+  strategiesProd:        
+    lm-blocktane-ftx-brl-pax:
+      accounts:
+        - ftx-prod1
+        - blocktane-prod1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_brl_pax"
+    lm-blocktane-ftx-btc-brl:
+      accounts:
+        - ftx-prod1
+        - blocktane-prod1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_btc_brl"      
+    lm-blocktane-ftx-btc-pax:
+      accounts:
+        - ftx-prod1
+        - blocktane-prod1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_btc_pax"  
+    lm-blocktane-ftx-eth-btc:
+      accounts:
+        - ftx-prod1
+        - blocktane-prod1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_eth_btc"  
