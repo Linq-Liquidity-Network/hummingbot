@@ -57,7 +57,7 @@ cdef class BlocktaneOrderBook(OrderBook):
                 else:
                     result.append(level)
             return result
-            
+
         if metadata:
             msg.update(metadata)
         return OrderBookMessage(OrderBookMessageType.DIFF, {
@@ -133,12 +133,12 @@ cdef class BlocktaneOrderBook(OrderBook):
 
     @classmethod
     def trade_message_from_exchange(cls, msg: Dict[str, any], metadata: Optional[Dict] = None):
-    # {'fthusd.trades': {'trades': [{'tid': 9, 'taker_type': 'sell', 'date': 1586958619, 'price': '51.0', 'amount': '0.02'}]}}
+        # {'fthusd.trades': {'trades': [{'tid': 9, 'taker_type': 'sell', 'date': 1586958619, 'price': '51.0', 'amount': '0.02'}]}}
         if metadata:
             msg.update(metadata)
 
         # cls.logger().error("Message from exchange: " + str(msg))
-        
+
         msg = msg.popitem()
         # cls.logger().error(str(msg))
 

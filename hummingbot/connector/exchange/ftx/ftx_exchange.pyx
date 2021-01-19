@@ -636,7 +636,7 @@ cdef class FtxExchange(ExchangeBase):
             self.logger().error(
                 f"Error submitting buy {order_type} order to ftx for "
                 f"{decimal_amount} {trading_pair} "
-                f"{decimal_price}.",
+                f"{decimal_price}. Response={order_result}",
                 exc_info=True
             )
             self.c_trigger_event(self.MARKET_ORDER_FAILURE_EVENT_TAG,
@@ -702,17 +702,17 @@ cdef class FtxExchange(ExchangeBase):
                                                       order_type,
                                                       decimal_price)
             elif order_type is OrderType.MARKET:
-                decimal_price = self.c_get_price(trading_pair, False)
                 order_result = await self.place_order(order_id,
                                                       trading_pair,
                                                       decimal_amount,
                                                       False,
                                                       order_type,
-                                                      decimal_price)
+                                                      None)
             else:
                 raise ValueError(f"Invalid OrderType {order_type}. Aborting.")
 
             exchange_order_id = str(order_result["result"]["id"])
+
             tracked_order = self._in_flight_orders.get(order_id)
             if tracked_order is not None and exchange_order_id:
                 tracked_order.update_exchange_order_id(exchange_order_id)
@@ -734,12 +734,11 @@ cdef class FtxExchange(ExchangeBase):
             tracked_order = self._in_flight_orders.get(order_id)
             tracked_order.set_status("FAILURE")
             self.c_stop_tracking_order(order_id)
-            self.logger().network(
+            self.logger().error(
                 f"Error submitting sell {order_type} order to ftx for "
                 f"{decimal_amount} {trading_pair} "
-                f"{decimal_price if order_type.is_limit_type() else ''}.",
-                exc_info=True,
-                app_warning_msg=f"Failed to submit sell order to ftx. Check API key and network connection."
+                f"{decimal_price}. Response={order_result}",
+                exc_info=True
             )
             self.c_trigger_event(self.MARKET_ORDER_FAILURE_EVENT_TAG,
                                  MarketOrderFailureEvent(self._current_timestamp, order_id, order_type))

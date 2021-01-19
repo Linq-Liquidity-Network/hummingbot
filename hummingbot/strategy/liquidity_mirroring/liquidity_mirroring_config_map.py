@@ -148,9 +148,9 @@ liquidity_mirroring_config_map = {
     "fee_override": ConfigVar(
         key="fee_override",
         prompt="Enter the total fee percentage to use, inclusive of both exchanges (1% = 0.01) >>> ",
-        prompt_on_new=False,
+        prompt_on_new=True,
         default=None,
-        required_if=lambda: False, 
+        required_if=lambda: True, 
         type_str="decimal"
     ),
     "slack_update_period": ConfigVar(

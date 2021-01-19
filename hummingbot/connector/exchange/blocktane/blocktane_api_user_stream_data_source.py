@@ -16,8 +16,8 @@ from hummingbot.connector.exchange.blocktane.blocktane_auth import BlocktaneAuth
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 
-
 WS_BASE_URL = "wss://trade.blocktane.io/api/v2/ws/private/?stream=order&stream=trade&stream=balance"
+
 
 
 class BlocktaneAPIUserStreamDataSource(UserStreamTrackerDataSource):

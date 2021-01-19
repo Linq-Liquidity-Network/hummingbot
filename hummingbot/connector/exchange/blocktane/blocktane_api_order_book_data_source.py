@@ -19,7 +19,6 @@ import requests
 import time
 import ujson
 import websockets
-from websockets.exceptions import ConnectionClosed
 
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.data_type.order_book_message import OrderBookMessage
