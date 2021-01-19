@@ -73,181 +73,12 @@ global:
     bolsacripto-dev1:
       description: "michael@tokamak.ca"
       credentials: placeholder
-    binance-prod1:
-      description: ""
-      credentials: placeholder
-    binance-dev1:
-      description: ""
-      credentials: placeholder
-    ftx-prod1:
-      description: ""
-      credentials: placeholder
-    ftx-dev1:
-      description: ""
-      credentials: placeholder
-    loopring-dev1:
-      description: "Account #2386"
-      credentials: placeholder
-    loopring-prod1:
-      description: "Account #4553"
-      credentials: placeholder
-    loopring-prod2:
-      description: "Account #4551"
-      credentials: placeholder
-    loopring-prod3:
-      description: "Account #4552"
-      credentials: placeholder
-    binance-dev1:
-      description: 'serviceaccounts@tokamak.ai'
-      credentials: placeholder
 
 
 
   # Strategies to launch on production.
   # There will be one pod for each sub-entry of strategiesProd - each with one container
   # for each of thier sub-entries.
-  strategiesProd:
-    lm-bolsacripto-ftx-btc-brl:
-      accounts: 
-        - bolsacripto-prod1
-        - ftx-prod1
-      strategy: liquidity_mirroring
-    lm-bolsacripto-ftx-btc-pax:
-      accounts: 
-        - bolsacripto-prod1
-        - ftx-prod1
-      strategy: liquidity_mirroring
-    lm-bolsacripto-ftx-eth-btc:
-      accounts: 
-        - bolsacripto-prod1
-        - ftx-prod1
-      strategy: liquidity_mirroring        
-    lm-bolsacripto-ftx-brl-pax:
-      accounts:
-        - bolsacripto-prod1
-        - ftx-prod1
-      strategy: liquidity_mirroring        
-    lm-loopring-binance-lrc-usdt:
-      accounts:
-        - loopring-prod2
-        - binance-prod1
-      strategy: liquidity_mirroring
-
-  # Strategies to launch on development.
-  # There will be one pod for each sub-entry of strategiesDev - each with one container
-  # for each of thier sub-entries.
-  strategiesDev:
-    #lm-bolsacripto-ftx-btc-brl:
-    #  accounts: 
-    #    - bolsacripto-dev1
-    #    - ftx-dev1
-    #lm-bolsacripto-ftx-btc-pax:
-    #  accounts: 
-    #    - bolsacripto-dev1
-    #    - ftx-dev1
-    #lm-bolsacripto-ftx-eth-btc:
-    #  accounts: 
-    #    - bolsacripto-dev1
-    #    - ftx-dev1
-    #lm-bolsacripto-novadax-eth-btc:
-    #  accounts:
-    #    - bolsacripto-dev1
-    #    - novadax-dev1
-    #pm-binance-test:
-    #  accounts:
-    #    - binance-dev1
-    #  strategy: pure_market_making
-    #  options:
-    #    paperTrade: true
-    #    strategyFileName: "conf_pure_mm_1"    
-    #test-loopring-2:
-    #  accounts:
-    #    - loopring-dev1
-    #    - loopring-dev1
-    #  strategy: liquidity_mirroring
-    #  options:
-    #    paperTrade: true
-    #    strategyFileName: pure_market_making_loopring_btc_usdt.yml
-    lm-bitbay-binance-eth-usdt:
-      accounts:
-        - binance-dev1
-        - bitbay-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_usdt" 
-    lm-bitbay-binance-eth-btc:
-      accounts:
-        - binance-dev1
-        - bitbay-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_btc"          
-    lm-bitbay-binance-btc-usdt:
-      accounts:
-        - binance-dev1
-        - bitbay-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt"         
-    #lm-bitbay-binance-eth-usdt-ll:
-    #  accounts:
-    #    - binance-dev1
-    #    - bitbay-dev1
-    #  strategy: liquidity_mirroring
-    #  options:
-    #    paperTrade: false
-    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_usdt_ll" 
-    #lm-bitbay-binance-eth-btc-ll:
-    #  accounts:
-    #    - binance-dev1
-    #    - bitbay-dev1
-    #  strategy: liquidity_mirroring
-    #  options:
-    #    paperTrade: false
-    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_btc_ll"          
-    #lm-bitbay-binance-btc-usdt-ll:
-    #  accounts:
-    #    - binance-dev1
-    #    - bitbay-dev1
-    #  strategy: liquidity_mirroring
-    #  options:
-    #    paperTrade: false
-    #    strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt_ll"           
-    lm-upbit-binance-eth-btc:
-      accounts:
-        - binance-dev2
-        - upbit-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_btc" 
-    lm-upbit-binance-eth-usdt:
-      accounts:
-        - binance-dev2
-        - upbit-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_usdt" 
-    lm-upbit-binance-btc-usdt:
-      accounts:
-        - binance-dev2
-        - upbit-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_upbit_binance_btc_usdt" 
-    lm-loopring-binance-lrc-usdt:
-      accounts:
-        - binance-staging1
-        - loopring-dev1
-      strategy: liquidity_mirroring
-      options:
-        paperTrade: false
-        strategyFileName: "conf_liquidity_mirroring_loopring_binance_lrc_usdt"
   strategiesProd:        
     lm-blocktane-ftx-brl-pax:
       accounts:
@@ -281,3 +112,66 @@ global:
       options:
         paperTrade: false
         strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_eth_btc"  
+
+  # Strategies to launch on development.
+  # There will be one pod for each sub-entry of strategiesDev - each with one container
+  # for each of thier sub-entries.
+  strategiesDev:
+    lm-bitbay-binance-eth-usdt:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_usdt" 
+    lm-bitbay-binance-eth-btc:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_eth_btc"          
+    lm-bitbay-binance-btc-usdt:
+      accounts:
+        - binance-dev1
+        - bitbay-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_bitbay_binance_btc_usdt"             
+    lm-upbit-binance-eth-btc:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_btc" 
+    lm-upbit-binance-eth-usdt:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_eth_usdt" 
+    lm-upbit-binance-btc-usdt:
+      accounts:
+        - binance-dev2
+        - upbit-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_upbit_binance_btc_usdt" 
+    lm-loopring-binance-lrc-usdt:
+      accounts:
+        - binance-staging1
+        - loopring-dev1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_loopring_binance_lrc_usdt"
+
+  
