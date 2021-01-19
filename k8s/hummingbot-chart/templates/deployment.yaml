@@ -1,5 +1,5 @@
-{{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
-{{- range $strategyName, $strategy := $strategyBlock -}}
+{{ $strategyBlock := index .Values.global .Values.global.releaseEnvironment  }}
+{{ range $strategyName, $strategy := $strategyBlock }}
 ---
 apiVersion: apps/v1beta1
 kind: Deployment
