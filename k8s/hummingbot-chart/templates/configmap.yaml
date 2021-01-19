@@ -171,6 +171,6 @@ data:
     - - BNB
       - 0.5
 
-    SLACK_HOOK: https://hooks.slack.com/services/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
+    SLACK_HOOK: https://hooks.slack.com/services/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
 
 {{ end }}
