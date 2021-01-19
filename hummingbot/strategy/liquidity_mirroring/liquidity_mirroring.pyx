@@ -457,7 +457,7 @@ cdef class LiquidityMirroringStrategy(StrategyBase):
         new_desired_book.crop(len(self.bid_amounts), len(self.ask_amounts))
         #new_desired_book.scale_amounts(self.mirroring_amount_scale) # add this if we want to scale back the size of our mirrored orders vs the source order
         new_desired_book.markup(self.order_price_markup, self.order_price_markup, self.fee_override)
-        new_desired_book.limit_by_ratios(self.bid_amount_percents, self.ask_amount_percents)
+        new_desired_book.limit_by_ratios(self.bid_amounts, self.ask_amounts)
         new_desired_book.apply_limits()
         self.desired_book = new_desired_book
 
