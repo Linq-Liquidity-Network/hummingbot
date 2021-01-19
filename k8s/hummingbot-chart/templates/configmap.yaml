@@ -1,5 +1,5 @@
-{{- $strategyBlock := index .Values.global .Values.global.releaseEnvironment  -}}
-{{- range $strategyName, $strategy := $strategyBlock }}
+{{ $strategyBlock := index .Values.global .Values.global.releaseEnvironment  }}
+{{ range $strategyName, $strategy := $strategyBlock }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -171,6 +171,6 @@ data:
     - - BNB
       - 0.5
 
-    SLACK_HOOK: https://hooks.slack.com/services/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
+    SLACK_HOOK: https://hooks.slack.com/services/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
 
 {{ end }}
