@@ -6,6 +6,7 @@ from hummingbot.core.event.events import TradeType
 from hummingbot.strategy.liquidity_mirroring.order_tracking.order_tracker import OrderTracker
 from hummingbot.strategy.liquidity_mirroring.order_tracking.order import Order
 
+
 class ModelOrder:
     def __init__(self, price: Decimal, amount: Decimal, side: TradeType):
         self.price: Decimal = price
@@ -51,7 +52,7 @@ cdef class ModelBook:
         self.bids = self._cut_book_amount(self.bids, offsettings_amounts.sells)
         self.asks = self._cut_book_amount(self.asks, offsettings_amounts.buys)
 
-    def limit_by_ratios(self, bids_ratios: List[float], asks_ratios: List[float]):
+    def limit_by_ratios(self, bids_ratios: List[Decimal], asks_ratios: List[Decimal]):
         self.bids = self._limit_book(self.bids, bids_ratios, TradeType.BUY)
         self.asks = self._limit_book(self.asks, asks_ratios, TradeType.SELL)
 
@@ -96,13 +97,18 @@ cdef class ModelBook:
         for order in book:
             order.price *= 1 + markup
 
-    def _limit_book(self, book, ratios: List[float], side: TradeType):
+    def _limit_book(self, book, ratios: List[Decimal], side: TradeType):
         new_desired_book = []
         leftover_amount = Decimal(0)
         for order, max_amount in zip(book, ratios):
             max_amount += leftover_amount
-            desired_order = ModelOrder(order.price, min(order.amount, max_amount), side)
-            leftover_amount = max_amount - desired_order.amount # guaranteed max_amount >= desired_order.amount due to above line of code
+            if side is TradeType.BUY:
+                limited_amount = max_amount / order.price
+                desired_order = ModelOrder(order.price, min(order.amount, limited_amount), side)
+                leftover_amount = max_amount - desired_order.amount * desired_order.price # guaranteed max_amount >= desired_order.amount due to above line of code
+            else:
+                desired_order = ModelOrder(order.price, min(order.amount, max_amount), side)
+                leftover_amount = max_amount - desired_order.amount # guaranteed max_amount >= desired_order.amount due to above line of code
             new_desired_book.append(desired_order)
         return new_desired_book
 
