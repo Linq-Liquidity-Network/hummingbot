@@ -207,7 +207,7 @@ cdef class BlocktaneExchange(ExchangeBase):
                           object order_side,
                           object amount,
                           object price):
-        # Fee info from https://trade.bolsacripto.com/api/v2/xt/public/trading_fees
+        # Fee info from https://trade.blocktane.io/api/v2/xt/public/trading_fees
         cdef:
             object maker_fee = Decimal(0.002)
             object taker_fee = Decimal(0.002)
