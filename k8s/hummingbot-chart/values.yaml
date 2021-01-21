@@ -112,6 +112,14 @@ global:
       options:
         paperTrade: false
         strategyFileName: "conf_liquidity_mirroring_blocktane_ftx_eth_btc"  
+    lm-blocktane-binance-eth-brl:
+      accounts:
+        - binance-prod1
+        - blocktane-prod1
+      strategy: liquidity_mirroring
+      options:
+        paperTrade: false
+        strategyFileName: "conf_liquidity_mirroring_blocktane_binance_eth_brl"  
 
   # Strategies to launch on development.
   # There will be one pod for each sub-entry of strategiesDev - each with one container
